@@ -19,7 +19,7 @@ export default function Layout({ activePage, onNavigate, children }: LayoutProps
       {/* Main content */}
       <main
         className={[
-          'min-h-dvh flex flex-col',
+          'flex-1 flex flex-col',
           // On desktop, offset content by sidebar width
           'md:ml-60',
           // On mobile, add bottom padding for nav bar

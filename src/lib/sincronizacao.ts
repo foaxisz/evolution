@@ -154,9 +154,37 @@ export async function empurrar(chave: string): Promise<void> {
   if (data?.atualizado_em) marcarCarimbo(chave, data.atualizado_em);
 }
 
-/** Manda tudo — usado no primeiro login, para semear a conta. */
-export async function empurrarTudo(): Promise<void> {
-  for (const chave of CHAVES_SINCRONIZADAS) {
-    if (localStorage.getItem(chave) !== null) await empurrar(chave);
+/** Manda múltiplos documentos de uma vez para o servidor. */
+export async function empurrarMuitas(chaves: string[]): Promise<void> {
+  if (!supabase || chaves.length === 0) return;
+  const sessao = (await supabase.auth.getSession()).data.session;
+  if (!sessao) return;
+
+  const linhas: { usuario_id: string; chave: string; dados: unknown }[] = [];
+  for (const chave of chaves) {
+    const dados = lerLocal(chave);
+    if (dados !== null) {
+      linhas.push({ usuario_id: sessao.user.id, chave, dados });
+    }
   }
+
+  if (linhas.length === 0) return;
+
+  const { data, error } = await supabase
+    .from('documentos')
+    .upsert(linhas, { onConflict: 'usuario_id,chave' })
+    .select('chave, atualizado_em');
+
+  if (error) throw error;
+
+  if (data) {
+    (data as { chave: string; atualizado_em: string }[]).forEach(item => {
+      if (item.atualizado_em) marcarCarimbo(item.chave, item.atualizado_em);
+    });
+  }
+}
+
+/** Manda tudo — usado no primeiro login e carga inicial em um único envio bulk. */
+export async function empurrarTudo(): Promise<void> {
+  await empurrarMuitas([...CHAVES_SINCRONIZADAS]);
 }

@@ -43,12 +43,7 @@
 }
 
 html {
-  /* A barra de rolagem existe sempre. Sem isto, ir de uma página alta
-     (Dashboard) para uma baixa faz a barra sumir, a largura da viewport
-     muda e tudo que é fixo — inclusive a nav de baixo — salta de lugar.
-     `scrollbar-gutter` sozinho não resolve porque o elemento raiz só vira
-     contêiner de rolagem quando o conteúdo transborda. */
-  overflow-y: scroll;
+  overflow-y: auto;
   scrollbar-gutter: stable;
 }
 

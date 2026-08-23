@@ -137,7 +137,7 @@ export default function ReviewsPage() {
     const corEditor = editor.color || COR_PADRAO;
 
     return (
-      <div className="relative min-h-dvh w-full animate-fade-in px-6 pb-20 pt-5 md:px-12 lg:px-20">
+      <div className="relative flex-1 w-full animate-fade-in px-6 pb-20 pt-5 md:px-12 lg:px-20">
         {/* Brilho no topo, na cor da entrada: o caráter de diário vem da
             luz, não de tingir o texto inteiro. */}
         <div

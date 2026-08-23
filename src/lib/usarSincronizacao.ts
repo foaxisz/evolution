@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { observarGravacoes } from '../store';
 import { supabase } from './supabase';
 import {
-  CHAVES_SINCRONIZADAS, puxar, empurrar, empurrarTudo,
+  CHAVES_SINCRONIZADAS, puxar, empurrar, empurrarMuitas, empurrarTudo,
   type EstadoDaSincronizacao,
 } from './sincronizacao';
 
@@ -38,7 +38,7 @@ export function useSincronizacao(temSessao: boolean) {
     const chaves = [...fila.current];
     fila.current.clear();
     try {
-      for (const c of chaves) await empurrar(c);
+      await empurrarMuitas(chaves);
       setEstado('ocioso');
     } catch {
       // Devolve para a fila: o que não subiu tenta de novo na próxima
