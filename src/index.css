@@ -1,0 +1,631 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Fósforo roxo ────────────────────────────────────── */
+  --color-bg-primary: #0a0812;
+  --color-bg-secondary: #100b1e;
+  --color-bg-card: #16112a;
+  --color-bg-card-hover: #1e1738;
+  --color-bg-input: #0f0b1c;
+  --color-border: #2b2145;
+  --color-border-light: #3f3163;
+
+  --color-text-primary: #ece8f8;
+  --color-text-secondary: #a99cd0;
+  --color-text-muted: #8578ad;
+
+  --color-accent: #a855f7;
+  --color-accent-light: #c88cff;
+  --color-accent-dim: #7c3aed;
+  --color-accent-bg: rgba(168, 85, 247, 0.12);
+
+  --color-success: #3ddc97;
+  --color-success-bg: rgba(61, 220, 151, 0.12);
+  --color-warning: #ffb000;
+  --color-warning-bg: rgba(255, 176, 0, 0.12);
+  --color-danger: #ff4d8d;
+  --color-danger-bg: rgba(255, 77, 141, 0.12);
+  --color-info: #38bdf8;
+  --color-info-bg: rgba(56, 189, 248, 0.12);
+
+  --color-cookie: #ffb000;
+  --color-cookie-bg: rgba(255, 176, 0, 0.08);
+
+  /* ── Cantos modernos ─────────────────────────────────── */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.375rem;
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2.25rem;
+}
+
+html {
+  /* A barra de rolagem existe sempre. Sem isto, ir de uma página alta
+     (Dashboard) para uma baixa faz a barra sumir, a largura da viewport
+     muda e tudo que é fixo — inclusive a nav de baixo — salta de lugar.
+     `scrollbar-gutter` sozinho não resolve porque o elemento raiz só vira
+     contêiner de rolagem quando o conteúdo transborda. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Uma palavra sem espaço — link colado, nome de arquivo, texto grudado
+     — empurrava a página inteira e criava rolagem lateral no celular.
+     `anywhere`, não `break-word`: só o primeiro quebra a linha, e é o
+     `anywhere` que também reduz a largura mínima do conteúdo, que é o
+     que faz o item flex encolher em vez de esticar o pai. */
+  overflow-wrap: anywhere;
+}
+
+/* Barra fina e sem trilho. Com 8px e trilho claro ela virava uma faixa
+   acesa na borda de cada lista, mais visível que o próprio conteúdo. */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-light);
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-bg-primary);
+}
+
+@layer utilities {
+  .font-arcade {
+    font-family: 'Press Start 2P', 'JetBrains Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+
+  /*
+   * Terminal de tubo — para o texto que a pessoa ESCREVE.
+   *
+   * A Press Start 2P é fonte de bitmap: ótima em rótulo curto e número,
+   * péssima num nome de tarefa de trinta caracteres, que é onde ela vira
+   * um paredão. A JetBrains do resto do app resolve a leitura mas não diz
+   * nada — ao lado dos placares em bitmap ficava a peça sem sotaque.
+   *
+   * A VT323 é o meio termo honesto: desenho de terminal CRT, mesma família
+   * de referência das scanlines que já estão na tela, e legível em corpo
+   * pequeno porque foi feita para ler texto corrido num monitor.
+   *
+   * Ela renderiza menor que o nominal — o corpo aqui é maior que o da
+   * JetBrains no mesmo lugar de propósito.
+   */
+  .font-terminal {
+    font-family: 'VT323', 'JetBrains Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+  }
+
+  .glow {
+    text-shadow:
+      0 0 6px currentColor,
+      0 0 18px color-mix(in oklab, currentColor 40%, transparent);
+  }
+
+  .glow-box {
+    box-shadow:
+      0 0 8px color-mix(in oklab, var(--color-accent) 35%, transparent),
+      inset 0 0 12px color-mix(in oklab, var(--color-accent) 8%, transparent);
+  }
+
+  /* Botão com gradiente — o toque moderno sobre a base Matrix */
+  .btn-grad {
+    background-image: linear-gradient(
+      135deg,
+      var(--color-accent-dim),
+      var(--color-accent) 55%,
+      var(--color-accent-light)
+    );
+    box-shadow:
+      0 4px 16px color-mix(in oklab, var(--color-accent) 32%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
+  .btn-grad:hover {
+    filter: brightness(1.12);
+  }
+
+  /* Card moderno: leve profundidade + brilho interno no topo */
+  .card-soft {
+    background-image: linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--color-accent) 6%, transparent),
+      transparent 45%
+    );
+    box-shadow:
+      0 8px 28px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 color-mix(in oklab, var(--color-accent) 14%, transparent);
+  }
+
+  /* IMPORTANTE: não usar `will-change: transform` aqui. Um ancestral com
+     will-change de transform vira bloco de contenção para position:fixed,
+     e o modal passa a se posicionar pela div da página em vez da viewport.
+     `will-change: opacity` cria contexto de empilhamento mas não bloco de
+     contenção, então é seguro. */
+  .animate-fade-in {
+    animation: fadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: opacity;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: opacity;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: opacity;
+  }
+
+  /* Depois de animar, libera o will-change */
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-slide-up {
+    animation-fill-mode: both;
+  }
+
+  /* Saída suave de item de lista. O truque do grid-template-rows anima a
+     altura sem precisar conhecê-la de antemão (height: auto não anima). */
+  /* A opacidade some antes do colapso terminar: se as duas durassem o
+     mesmo, o item parecia ser espremido em vez de sair. O JS que remove
+     o elemento espera um pouco MAIS que estes 340ms — antes ele cortava
+     os últimos quadros e a saída parecia estalar. */
+  .item-saindo {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: scale(0.97);
+    margin-bottom: 0 !important;
+    transition:
+      grid-template-rows 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.18s ease-in,
+      transform 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .item-saindo > * {
+    overflow: hidden;
+    min-height: 0;
+    /* Filho de grade nasce com `min-width: auto` e se recusa a encolher
+       abaixo do próprio conteúdo: uma linha com `truncate` (nowrap) então
+       estica o invólucro e cria rolagem lateral. */
+    min-width: 0;
+  }
+
+  /* Entrada por animação, não por transição: um item recém-montado já
+     nasce no estado final, então transição nenhuma dispara — era por isso
+     que ele aparecia do nada. A animação roda uma vez, na montagem. */
+  .item-entrando {
+    display: grid;
+    grid-template-rows: 1fr;
+    /* Sem fill-mode: não há delay, então não muda o resultado e o item
+       fica no estado natural fora do intervalo da animação. */
+    animation: itemEntra 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .item-entrando > * {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /* ── Vocabulário de console ──
+     Peças do idioma arcade que já vinha sendo usado à mão no Mil
+     Interações. Viram utilitário porque agora repetem no Foco. */
+
+  /* Ponto de status: aceso e pulsando devagar quando há bloco correndo. */
+  .ponto-status {
+    animation: pulsarStatus 2.4s ease-in-out infinite;
+  }
+
+  /* Filete que some nas pontas — separa o rótulo central da barra de
+     sistema sem virar uma linha dura atravessando a tela. */
+  .filete {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    opacity: 0.35;
+  }
+
+  /* Lista que rola sem mostrar barra nenhuma.
+     Em lista curta dentro de cartão, a barra pesa mais do que ajuda — e
+     `overflow-y-auto` sozinho deixa o eixo X em `visible`, que o navegador
+     promove a `auto`: basta um filho um pixel mais largo para aparecer uma
+     barra horizontal que não rola nada. Por isso o X vai travado aqui. */
+  .rolagem-limpa {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .rolagem-limpa::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Cabine em tela cheia. Entra crescendo de leve, nunca de estalo. */
+  .cabine-entrando {
+    animation: cabineEntra 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .cabine-saindo {
+    animation: cabineSai 0.2s ease-in forwards;
+  }
+
+  /* Aumenta a área que responde ao toque sem mexer no tamanho visual do
+     botão nem empurrar nada no layout: o ::after é transparente, fica
+     centralizado e só amplia o alvo. 44px é a medida de dedo.
+
+     Em fileira densa (os quadradinhos de dia da semana) 44px roubaria o
+     toque do vizinho e marcaria o dia errado — por isso a variante cresce
+     na horizontal só até o passo da grade, encostando sem invadir. */
+  /* CUIDADO: esta classe declara `position: relative` e vem DEPOIS das
+     utilities do Tailwind na cascata, com a mesma especificidade — então
+     ela vence `absolute` e `fixed`. Nunca combine `.alvo-toque` com
+     posicionamento: o elemento volta para o fluxo e sai do lugar. Para
+     botão posicionado, use padding ou `.botao-icone`. */
+  .alvo-toque {
+    position: relative;
+  }
+
+  .alvo-toque::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+  }
+
+  /*
+   * Botão de ícone dentro de uma fileira.
+   *
+   * NÃO usa `.alvo-toque`. A expansão de 44px dele é invisível e centrada
+   * no ícone, então dois botões separados por 8px disputam a mesma área e
+   * o clique vai para o que estiver por cima no DOM. De fora, o ícone
+   * simplesmente não responde — e era isso que fazia clicar no calendário
+   * do trimestre acrescentar um marcador.
+   *
+   * Aqui a área é real e o `gap` da fileira garante que duas não se
+   * toquem. 28px é menos que os 44px do guia de toque, mas é o maior que
+   * cabe sem voltar a roubar o vizinho.
+   */
+  .botao-icone {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    border-radius: 0.25rem;
+  }
+
+  .alvo-toque-densa::after {
+    width: max(100%, 24px);
+    height: max(100%, 32px);
+  }
+
+  /* Chips de filtro. Aqui NÃO dá para repetir o truque de `0fr` usado na
+     saída de item: num item flex o `1fr` não tem espaço livre contra o
+     que resolver e a faixa colapsa para 0 — os chips somem de vez. A
+     largura vem medida do JS em `--w`.
+
+     Animação, não transição: a animação já começa no estado `from`, então
+     não preciso pintar um quadro na largura natural antes de encolher.
+     O espaço entre chips é margem do próprio chip (não `gap` do pai), que
+     sobreviveria ao colapso e deixaria um vão de 8px onde o chip saiu. */
+  .chip-cx {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* Sem fill-mode: terminada a animação, a largura volta a ser auto e o
+     chip acompanha a mudança do contador — `forwards` o congelaria na
+     largura medida na entrada. Como não há delay, também não existe
+     quadro piscando na largura cheia antes de começar. */
+  .chip-entrando {
+    animation: chipEntra 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .chip-saindo {
+    animation: chipSai 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  /* Carimbo de "conquistado" sobre a foto do produto. Sem `will-change`:
+     um ancestral com will-change de transform vira bloco de contenção e
+     desloca o position:fixed do modal (ver nota acima). */
+  .carimbo {
+    animation: carimbar 0.38s cubic-bezier(0.18, 1.4, 0.4, 1) both;
+  }
+
+  /* Barra de desfazer: sobe do rodapé sem empurrar nada. */
+  .toast-entrando {
+    animation: toastSobe 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* ── Entrada dos gráficos ──
+     Tudo aqui é `both`, nunca `forwards` só: o estado inicial precisa
+     valer ANTES da animação começar, senão o gráfico pisca inteiro no
+     primeiro quadro e só depois recolhe para animar. */
+
+  /* Traço do gráfico de linha, desenhado da esquerda para a direita.
+     `--traco` é o comprimento aproximado, medido em JS. */
+  .linha-desenhando {
+    stroke-dasharray: var(--traco);
+    stroke-dashoffset: var(--traco);
+    animation: desenharTraco 1s cubic-bezier(0.33, 1, 0.68, 1) both;
+  }
+
+  /* A área embaixo do traço entra atrasada, quando o traço já passou. */
+  .area-surgindo {
+    animation: surgir 0.5s ease-out 0.45s both;
+  }
+
+  .ponto-surgindo {
+    animation: surgir 0.25s ease-out both;
+  }
+
+  /* Barra vertical: cresce da base. Sem `transform-origin: bottom` ela
+     cresce do centro e o gráfico inteiro parece respirar. */
+  .barra-crescendo {
+    transform-origin: bottom;
+    animation: crescerBarra 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Barra horizontal: anima a largura declarada em `--largura`. */
+  .barra-esticando {
+    animation: esticarBarra 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .celula-surgindo {
+    animation: surgirCelula 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Bloco da grade de horário: só opacidade. Escala numa barra de 3px de
+     largura não se lê, e são até uma centena e meia delas na tela — cem e
+     tantas transformações simultâneas custam quadro à toa. */
+  .bloco-surgindo {
+    animation: surgir 0.35s ease-out both;
+  }
+
+  .linha-entrando {
+    animation: linhaEntra 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Sem animação ao trocar de página: a montagem da árvore já custa caro
+     e a animação em cima disso é o que aparecia como engasgo. Modal e
+     painéis (scaleIn / transições de altura) seguem animados. */
+  .animate-fade-in,
+  .animate-slide-up {
+    animation: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-fade-in,
+    .animate-scale-in,
+    .animate-slide-up {
+      animation-duration: 0.01ms;
+    }
+    .item-saindo,
+    .item-entrando {
+      transition-duration: 0.01ms;
+    }
+    .item-entrando,
+    .chip-entrando,
+    .chip-saindo,
+    .carimbo,
+    .toast-entrando,
+    .cabine-entrando,
+    .cabine-saindo {
+      animation-duration: 0.01ms;
+    }
+    .ponto-status {
+      animation: none;
+    }
+    /* Os gráficos vão direto para o estado final: quem pediu menos
+       movimento continua vendo o dado inteiro, só sem a entrada. */
+    .linha-desenhando,
+    .area-surgindo,
+    .ponto-surgindo,
+    .barra-crescendo,
+    .barra-esticando,
+    .celula-surgindo,
+    .bloco-surgindo,
+    .linha-entrando {
+      animation-duration: 0.01ms;
+      animation-delay: 0ms !important;
+    }
+  }
+}
+
+@keyframes desenharTraco {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes surgir {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes crescerBarra {
+  from { transform: scaleY(0); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes esticarBarra {
+  from { width: 0; }
+  to { width: var(--largura); }
+}
+
+@keyframes surgirCelula {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes linhaEntra {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@layer components {
+  /* Tubo âmbar — Pote de Biscoitos e Reviews.
+     Funciona por cascata: as utilities do v4 compilam para var(--color-*),
+     então redefinir as variáveis aqui recolore a subárvore inteira. */
+  .tube-amber {
+    --color-accent: #ffb000;
+    --color-accent-light: #ffd166;
+    --color-accent-dim: #b37a00;
+    --color-accent-bg: rgba(255, 176, 0, 0.1);
+
+    --color-text-primary: #f7e6c8;
+    --color-text-secondary: #b39a72;
+    --color-text-muted: #8a7350;
+
+    --color-border: #3d2e14;
+    --color-border-light: #5c4620;
+
+    --color-bg-card: #140f06;
+    --color-bg-card-hover: #1e1609;
+    --color-bg-input: #0c0904;
+  }
+
+  /* Campo de formulário padrão — a mesma string de classes estava
+     repetida em todas as páginas. */
+  .entrada {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-input);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    transition: border-color 0.15s ease;
+  }
+
+  .entrada::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .entrada:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
+  /* Overlay global: só vinheta suave, sem listras.
+     As listras ficam restritas ao chrome (sidebar / nav), onde não
+     atrapalham a leitura do conteúdo. */
+  /* Sem `contain: strict` nem `translateZ`: promover esta camada de tela
+     cheia fazia o compositor pintar errado durante o scroll, deixando
+     partes da página pretas. */
+  /* Listras de TV antiga — aplicadas via ::after para não interferir
+     na cor de fundo do elemento. */
+  .crt-scanlines {
+    position: relative;
+  }
+
+  .crt-scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      rgba(0, 0, 0, 0.22) 3px 4px
+    );
+  }
+}
+
+/* Entrada de página: só opacidade. Animar translate numa árvore grande
+   força layout e paint no primeiro frame e engasga ao trocar de aba. */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Selo batendo na foto: entra grande e assenta, como carimbo mesmo. */
+@keyframes carimbar {
+  from { opacity: 0; transform: rotate(-8deg) scale(1.35); }
+  to   { opacity: 1; transform: rotate(-8deg) scale(1); }
+}
+
+@keyframes itemEntra {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* O chip abre e fecha a largura: só opacidade faria ele piscar por cima
+   dos vizinhos, que já teriam pulado para a posição nova de estalo.
+   `--w` é a largura natural, medida no JS antes do quadro. */
+@keyframes chipEntra {
+  from { width: 0; margin-right: 0; opacity: 0; transform: scale(0.92); }
+  60%  { opacity: 1; }
+  to   { width: var(--w); margin-right: 0.5rem; opacity: 1; transform: none; }
+}
+
+/* A opacidade sai antes da largura — se as duas durassem o mesmo, o chip
+   parecia espremido em vez de sair. */
+@keyframes chipSai {
+  from { width: var(--w); margin-right: 0.5rem; opacity: 1; transform: none; }
+  45%  { opacity: 0; }
+  to   { width: 0; margin-right: 0; opacity: 0; transform: scale(0.92); }
+}
+
+@keyframes pulsarStatus {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* A cabine sobe um pouco e cresce: dá a sensação de a máquina ligar, em
+   vez de a tela trocar. */
+@keyframes cabineEntra {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes cabineSai {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: scale(0.98); }
+}
+
+@keyframes toastSobe {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
