@@ -1,25 +1,39 @@
 import { supabase } from './supabase';
-import { mesclar, podar } from './mesclar';
-import { planejar, type Cabecalho } from './planejar';
+import {
+  desmontar, diferenca, aplicar, paraEnviar, DOC_INTEIRO,
+  type LinhaRemota,
+} from './registros';
 
 /**
  * Sincronização entre aparelhos.
  *
- * O app grava tudo no `localStorage` e continua funcionando offline; esta
- * camada leva cada documento para o servidor e traz de volta o que outro
- * aparelho mudou. O `localStorage` segue sendo a fonte que a interface lê —
- * nada aqui deixa a tela esperando rede.
+ * O `localStorage` continua sendo o que a tela lê: o app abre instantâneo
+ * e funciona offline, e nada aqui deixa a interface esperando rede. Esta
+ * camada leva o que mudou para o servidor e traz o que o outro aparelho
+ * mexeu.
  *
- * ── A regra de mesclagem, que é o ponto inteiro ──
+ * ── O que mudou em relação ao desenho anterior ──
  *
- * "O mais recente vence" aplicado ao documento INTEIRO perde dado: se você
- * marcar um hábito no celular e outro no PC, um dos dois some por completo.
- * Por isso a mescla é POR REGISTRO, usando o `id` como chave: a união dos
- * dois lados, e em caso de mesmo `id` fica o do lado mais recente.
+ * Antes, o servidor guardava o documento inteiro numa linha e gravar
+ * significava SUBSTITUIR esse documento. Isso torna a perda de dado
+ * estrutural: entre ler e escrever existe uma janela, e o que o outro
+ * aparelho gravou dentro dela é apagado por quem chegar depois. O cliente
+ * remendava com uma união dos dois lados; união não sabe apagar, então
+ * exclusão virou lápide, e lápide virou poda. O furo era o modelo.
  *
- * Assim o caso comum — registros diferentes criados em aparelhos
- * diferentes — não perde nada. Só há descarte quando os dois editaram o
- * MESMO registro, e aí não existe resposta certa sem perguntar.
+ * Agora a unidade é o REGISTRO, uma linha por hábito, e por registro não
+ * existe janela: marcar um hábito escreve a linha dele e não encosta na
+ * do outro. Sem mescla, sem lápide, sem poda. Duas coisas só disputam
+ * quando são o MESMO registro, e aí vence o carimbo mais novo do banco.
+ *
+ * ── As três memórias ──
+ *
+ *  - `evo_sync_pendentes`: ids gravados aqui que ainda não subiram. Vive
+ *    no localStorage, e não na memória, para sobreviver a fechar o app no
+ *    meio — senão uma gravação feita offline se perderia calada.
+ *  - `evo_sync_desde`: carimbo da linha mais nova que já vimos. É o que
+ *    torna a puxada proporcional ao que mudou, e não ao tamanho do banco.
+ *  - o próprio `localStorage` do app, que é a verdade da tela.
  */
 
 /** Documentos que fazem sentido sincronizar. */
@@ -40,13 +54,9 @@ export const CHAVES_SINCRONIZADAS = [
   'evo_foco_metas_semana',
   'evo_destaques',
   'evo_foco_ajustes',
-  // As lápides. Precisa sincronizar como qualquer outro documento — é ela
-  // que carrega a informação "isto foi excluído" para o outro aparelho.
-  'evo_excluidos',
 ] as const;
 
-/** Documento das lápides — o único com tratamento especial na puxada. */
-const EXCLUIDOS = 'evo_excluidos';
+export type ChaveSincronizada = typeof CHAVES_SINCRONIZADAS[number];
 
 /**
  * Ficam de fora de propósito:
@@ -55,17 +65,26 @@ const EXCLUIDOS = 'evo_excluidos';
  *   verdade está correndo no PC.
  * - `evo_foco_cabine`: estado de janela, não é dado do usuário.
  * - `evo_dashboard_janela`: preferência de tela, por aparelho.
+ * - `evo_excluidos`: as lápides do desenho anterior. Não existem mais —
+ *   exclusão agora é a coluna `excluido` da linha. Se sobrou no aparelho,
+ *   é lixo inofensivo.
  */
-
-export { mesclar };
 
 export type EstadoDaSincronizacao = 'ocioso' | 'enviando' | 'erro' | 'desligada';
 
-interface Documento {
-  chave: string;
-  dados: unknown;
-  atualizado_em: string;
+export function ehSincronizada(chave: string): chave is ChaveSincronizada {
+  return (CHAVES_SINCRONIZADAS as readonly string[]).includes(chave);
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// O que está guardado aqui
+// ══════════════════════════════════════════════════════════════════════
+
+const PENDENTES = 'evo_sync_pendentes';
+const DESDE = 'evo_sync_desde';
+
+/** Quantas linhas por requisição. Acima disso o Postgrest começa a doer. */
+const LOTE = 500;
 
 function lerLocal(chave: string): unknown {
   try {
@@ -76,194 +95,273 @@ function lerLocal(chave: string): unknown {
   }
 }
 
-/** Quando cada documento foi gravado aqui pela última vez. */
-const CARIMBOS = 'evo_sync_carimbos';
+type Pendentes = Record<string, string[]>;
 
-function carimbos(): Record<string, string> {
+function pendentes(): Pendentes {
   try {
-    return JSON.parse(localStorage.getItem(CARIMBOS) || '{}');
+    const v = JSON.parse(localStorage.getItem(PENDENTES) || '{}');
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
   } catch {
     return {};
   }
 }
 
-function marcarCarimbo(chave: string, quando: string) {
-  const c = carimbos();
-  c[chave] = quando;
-  localStorage.setItem(CARIMBOS, JSON.stringify(c));
-}
-
-export interface ResultadoDaPuxada {
-  /** Documentos que mudaram AQUI — a interface precisa se redesenhar. */
-  mudadas: string[];
-  /**
-   * Documentos que precisam subir: ou o servidor não os tem, ou a mescla
-   * produziu algo diferente do que está lá.
-   *
-   * Existe para não reenviar às cegas tudo o que já está igual no
-   * servidor. Cada envio sobrescreve o documento inteiro, então quanto
-   * menos envio desnecessário, menor a janela em que o outro aparelho
-   * pode gravar entre a nossa leitura e a nossa escrita.
-   */
-  aEnviar: string[];
+function gravarPendentes(p: Pendentes) {
+  localStorage.setItem(PENDENTES, JSON.stringify(p));
 }
 
 /**
- * Aplica as lápides a todos os documentos guardados aqui.
+ * Anota que estes registros mudaram aqui.
  *
- * Devolve as chaves que perderam algum registro — precisam ser
- * redesenhadas e reenviadas, senão o servidor continua com o registro
- * excluído e o outro aparelho o traz de volta na próxima puxada.
+ * Chamado pela gravação do store, com o valor anterior em mãos — daí sair
+ * a exclusão de graça: o id que existia antes e não existe agora entra na
+ * fila igual, e na hora de enviar vira uma linha com `excluido`.
  */
-function podarTudo(): string[] {
-  const excluidos = new Set(
-    ((lerLocal(EXCLUIDOS) as { id: string }[] | null) ?? [])
-      .filter(l => l && typeof l.id === 'string')
-      .map(l => l.id)
-  );
-  if (excluidos.size === 0) return [];
+export function anotarGravacao(chave: string, anteriorBruto: string | null): boolean {
+  if (!ehSincronizada(chave)) return false;
 
-  const podadas: string[] = [];
-  for (const chave of CHAVES_SINCRONIZADAS) {
-    if (chave === EXCLUIDOS) continue;
-    const local = lerLocal(chave);
-    const depois = podar(local, excluidos);
-    if (depois !== local) {
-      localStorage.setItem(chave, JSON.stringify(depois));
-      podadas.push(chave);
-    }
-  }
-  return podadas;
-}
-
-/** Mescla um documento do servidor no local. Devolve o que aconteceu. */
-function absorver(doc: Documento, locais: Record<string, string>) {
-  const local = lerLocal(doc.chave);
-
-  if (local === null) {
-    localStorage.setItem(doc.chave, JSON.stringify(doc.dados));
-    marcarCarimbo(doc.chave, doc.atualizado_em);
-    return { mudou: true, precisaEnviar: false };
+  let anterior: unknown = null;
+  try {
+    anterior = anteriorBruto === null ? null : JSON.parse(anteriorBruto);
+  } catch {
+    anterior = null;
   }
 
-  const carimboLocal = locais[doc.chave];
-  const remotoMaisNovo = !carimboLocal || doc.atualizado_em > carimboLocal;
-  const unido = mesclar(local, doc.dados, remotoMaisNovo);
+  const ids = diferenca(anterior, lerLocal(chave));
+  if (ids.length === 0) return false;
 
-  const antes = JSON.stringify(local);
-  const depois = JSON.stringify(unido);
-  if (antes !== depois) localStorage.setItem(doc.chave, depois);
-  marcarCarimbo(doc.chave, doc.atualizado_em);
-
-  return {
-    mudou: antes !== depois,
-    // A mescla é uma união: se o resultado difere do que veio de lá, é
-    // porque este aparelho tem algo que o servidor não tem.
-    precisaEnviar: depois !== JSON.stringify(doc.dados),
-  };
+  const p = pendentes();
+  p[chave] = [...new Set([...(p[chave] ?? []), ...ids])];
+  gravarPendentes(p);
+  return true;
 }
+
+/** Marca o documento inteiro como pendente — usado na primeira carga. */
+function anotarTudo(chave: string) {
+  const ids = desmontar(lerLocal(chave)).map(r => r.id);
+  if (ids.length === 0) return;
+  const p = pendentes();
+  p[chave] = [...new Set([...(p[chave] ?? []), ...ids])];
+  gravarPendentes(p);
+}
+
+function idsPendentes(chave: string): Set<string> {
+  return new Set(pendentes()[chave] ?? []);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Puxar
+// ══════════════════════════════════════════════════════════════════════
 
 /**
- * Traz o servidor para cá, mesclando com o que já existe.
+ * Traz do servidor tudo o que mudou desde a última vez.
  *
- * Duas velocidades, e a diferença importa porque isto roda a cada poucos
- * segundos:
+ * Devolve as chaves que mudaram aqui, para a interface se redesenhar.
  *
- *  - `completo` (na entrada): baixa todos os documentos e compara
- *    conteúdo. É a varredura que conserta qualquer desencontro deixado por
- *    um envio que falhou numa sessão anterior.
- *  - padrão (vigia e foco): baixa só `chave, atualizado_em` — poucas
- *    centenas de bytes — e só busca o `dados` de quem está mais novo lá do
- *    que o carimbo daqui. Sem isso, vigiar de 10 em 10 segundos baixaria o
- *    banco inteiro o tempo todo, no 4G da pessoa.
+ * O carimbo só avança DEPOIS de aplicar tudo. Se cair a rede no meio, na
+ * próxima vez o mesmo intervalo é pedido de novo — aplicar duas vezes a
+ * mesma linha não faz diferença, mas pular uma faria.
  */
-export async function puxar(completo = false): Promise<ResultadoDaPuxada> {
-  if (!supabase) return { mudadas: [], aEnviar: [] };
+export async function puxar(): Promise<string[]> {
+  if (!supabase) return [];
 
-  const locais = carimbos();
-  const mudadas: string[] = [];
-  const aEnviar: string[] = [];
+  const desde = localStorage.getItem(DESDE);
+  const linhas: LinhaRemota[] = [];
 
-  const { data: cabecalhos, error: erroCabecalhos } = await supabase
-    .from('documentos')
-    .select('chave, atualizado_em');
-  if (erroCabecalhos) throw erroCabecalhos;
+  // Paginado, e não com `limit`: cortar no meio de um carimbo repetido
+  // deixaria linhas para trás, porque a próxima busca começa depois dele.
+  for (let pagina = 0; ; pagina++) {
+    let consulta = supabase
+      .from('registros')
+      .select('colecao, registro_id, dados, excluido, atualizado_em')
+      .order('atualizado_em', { ascending: true })
+      .range(pagina * LOTE, (pagina + 1) * LOTE - 1);
 
-  const { baixar, subir } = planejar(
-    cabecalhos as Cabecalho[],
-    locais,
-    chave => lerLocal(chave) !== null,
-    CHAVES_SINCRONIZADAS,
-    completo,
-  );
+    if (desde) consulta = consulta.gt('atualizado_em', desde);
 
-  // Documento que só existe aqui ainda não subiu nenhuma vez.
-  aEnviar.push(...subir);
-
-  if (baixar.length > 0) {
-    const { data, error } = await supabase
-      .from('documentos')
-      .select('chave, dados, atualizado_em')
-      .in('chave', baixar);
+    const { data, error } = await consulta;
     if (error) throw error;
 
-    const docs = data as Documento[];
-
-    // As lápides primeiro, sempre. Elas são o que decide se um registro
-    // que chegou no mesmo lote deve entrar ou ser podado — absorvê-las
-    // depois deixaria o registro excluído aparecer por um ciclo.
-    const ordenados = [
-      ...docs.filter(d => d.chave === EXCLUIDOS),
-      ...docs.filter(d => d.chave !== EXCLUIDOS),
-    ];
-
-    ordenados.forEach(doc => {
-      const r = absorver(doc, locais);
-      if (r.mudou) mudadas.push(doc.chave);
-      if (r.precisaEnviar) aEnviar.push(doc.chave);
-    });
+    linhas.push(...(data as LinhaRemota[]));
+    if ((data as LinhaRemota[]).length < LOTE) break;
   }
 
-  // Poda no fim, sobre TUDO o que está gravado aqui — e não só sobre o que
-  // veio agora: a lápide pode ter chegado numa puxada anterior e o
-  // registro ressuscitado estar parado no localStorage desde então.
-  //
-  // Só quando algo desceu, porém. Ressuscitar é coisa que só a mescla faz,
-  // então puxada que não trouxe nada não tem o que podar — e varrer os
-  // dezesseis documentos de dez em dez segundos à toa custaria bateria.
-  // Qualquer sobra é pega pela varredura completa da entrada no app.
-  for (const chave of baixar.length > 0 ? podarTudo() : []) {
-    if (!mudadas.includes(chave)) mudadas.push(chave);
-    if (!aEnviar.includes(chave)) aEnviar.push(chave);
+  if (linhas.length === 0) return [];
+
+  const porColecao = new Map<string, LinhaRemota[]>();
+  for (const linha of linhas) {
+    if (!ehSincronizada(linha.colecao)) continue;
+    const lista = porColecao.get(linha.colecao);
+    if (lista) lista.push(linha);
+    else porColecao.set(linha.colecao, [linha]);
   }
 
-  return { mudadas, aEnviar };
+  const mudadas: string[] = [];
+  for (const [chave, doColecao] of porColecao) {
+    const antes = lerLocal(chave);
+    const depois = aplicar(antes, doColecao, idsPendentes(chave));
+    if (depois === antes) continue;
+
+    if (depois === null) localStorage.removeItem(chave);
+    else localStorage.setItem(chave, JSON.stringify(depois));
+    mudadas.push(chave);
+  }
+
+  // O maior carimbo do lote — inclusive de coleção que ignoramos, senão
+  // uma chave fora da lista faria a mesma linha voltar para sempre.
+  const maior = linhas.reduce(
+    (a, l) => (l.atualizado_em > a ? l.atualizado_em : a),
+    desde ?? '',
+  );
+  if (maior) localStorage.setItem(DESDE, maior);
+
+  return mudadas;
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// Enviar
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * Sobe o que está pendente.
+ *
+ * Cada linha é um registro, então isto nunca apaga o que o outro aparelho
+ * gravou: o pior caso é dois aparelhos escreverem o MESMO registro, e aí
+ * vence o carimbo do banco.
+ *
+ * A fila só é limpa depois do sucesso do lote, e só dos ids daquele lote:
+ * uma gravação que aconteça no meio do envio continua pendente e sobe na
+ * rodada seguinte.
+ */
+export async function empurrar(): Promise<void> {
+  if (!supabase) return;
+
+  const sessao = (await supabase.auth.getSession()).data.session;
+  if (!sessao) return;
+
+  const p = pendentes();
+  const chaves = Object.keys(p).filter(c => ehSincronizada(c) && p[c]?.length);
+  if (chaves.length === 0) return;
+
+  const linhas = chaves.flatMap(chave =>
+    paraEnviar(chave, lerLocal(chave), p[chave]).map(l => ({
+      usuario_id: sessao.user.id,
+      ...l,
+    }))
+  );
+
+  for (let i = 0; i < linhas.length; i += LOTE) {
+    const { error } = await supabase
+      .from('registros')
+      .upsert(linhas.slice(i, i + LOTE), { onConflict: 'usuario_id,colecao,registro_id' });
+    if (error) throw error;
+  }
+
+  // Relê: o que entrou na fila durante o envio precisa continuar lá.
+  const agora = pendentes();
+  for (const chave of chaves) {
+    const subiram = new Set(p[chave]);
+    const restam = (agora[chave] ?? []).filter(id => !subiram.has(id));
+    if (restam.length > 0) agora[chave] = restam;
+    else delete agora[chave];
+  }
+  gravarPendentes(agora);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Primeira carga
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * A entrada no app, e a única parte que precisa de cuidado especial.
+ *
+ * Puxa tudo primeiro e só então decide o que subir, comparando registro a
+ * registro com o que veio. Sem essa comparação, o aparelho reenviaria o
+ * banco inteiro a cada abertura, e cada reenvio faria o outro aparelho
+ * baixar tudo de novo — dois aparelhos se acordando em looping.
+ *
+ * O que é local e não está lá sobe; o que é igual não sobe. O histórico
+ * de quem já usava o app antes da conta entra por aqui, sem nada apagar.
+ */
+export async function primeiraCarga(): Promise<string[]> {
+  const mudadas = await puxar();
+
+  if (!supabase) return mudadas;
+
+  const remotos = new Map<string, string>();
+  for (let pagina = 0; ; pagina++) {
+    const { data, error } = await supabase
+      .from('registros')
+      .select('colecao, registro_id, dados, excluido')
+      .range(pagina * LOTE, (pagina + 1) * LOTE - 1);
+    if (error) throw error;
+
+    for (const l of data as LinhaRemota[]) {
+      remotos.set(`${l.colecao} ${l.registro_id}`, l.excluido ? ' excluido' : JSON.stringify(l.dados));
+    }
+    if ((data as LinhaRemota[]).length < LOTE) break;
+  }
+
+  const p = pendentes();
+  for (const chave of CHAVES_SINCRONIZADAS) {
+    const faltando = desmontar(lerLocal(chave))
+      .filter(r => remotos.get(`${chave} ${r.id}`) !== JSON.stringify(r.dados))
+      .map(r => r.id);
+
+    if (faltando.length > 0) {
+      p[chave] = [...new Set([...(p[chave] ?? []), ...faltando])];
+    }
+  }
+  gravarPendentes(p);
+
+  return mudadas;
+}
+
+/**
+ * Recomeça do zero, sem apagar nada.
+ *
+ * Esquece o carimbo e marca tudo o que está aqui para subir. É a saída
+ * para quando os dois lados divergirem por qualquer motivo — a próxima
+ * sincronização baixa o servidor inteiro e sobe o aparelho inteiro, e a
+ * união dos dois é o resultado, porque nada aqui apaga por omissão.
+ */
+export function recomecar(): void {
+  localStorage.removeItem(DESDE);
+  for (const chave of CHAVES_SINCRONIZADAS) anotarTudo(chave);
+}
+
+/** Quantos registros ainda não subiram. Só para o diagnóstico da tela. */
+export function quantosPendentes(): number {
+  return Object.values(pendentes()).reduce((n, ids) => n + (ids?.length ?? 0), 0);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Tempo real
+// ══════════════════════════════════════════════════════════════════════
 
 /**
  * Avisa quando o outro aparelho grava, sem esperar o próximo ciclo.
  *
- * O filtro por `usuario_id` é o que mantém o canal privado: sem ele o
- * servidor mandaria evento de linha alheia. Também chega evento das
- * NOSSAS próprias gravações — e tudo bem: a puxada que ele dispara é a
- * versão barata, e nada lá é mais novo que o nosso carimbo, então não faz
- * trabalho nenhum.
+ * O filtro por `usuario_id` é o que mantém o canal privado. Também chega
+ * evento das NOSSAS gravações — e tudo bem: a puxada que ele dispara pede
+ * só o que é mais novo que o nosso carimbo, e o que acabamos de escrever
+ * já está aqui.
  *
- * Se o Realtime não estiver ligado na tabela, a inscrição simplesmente
- * nunca dispara e a vigia por tempo continua cobrindo. Por isso nada aqui
- * lança erro: é um acelerador, não a fundação.
+ * Se o Realtime não estiver ligado na tabela, a inscrição nunca dispara e
+ * a vigia por tempo continua cobrindo. Por isso nada aqui lança erro: é
+ * um acelerador, não a fundação.
  */
 export function assinarMudancas(usuarioId: string, aoMudar: () => void): () => void {
   if (!supabase) return () => {};
 
   const canal = supabase
-    .channel(`documentos:${usuarioId}`)
+    .channel(`registros:${usuarioId}`)
     .on(
       'postgres_changes',
       {
         event: '*',
         schema: 'public',
-        table: 'documentos',
+        table: 'registros',
         filter: `usuario_id=eq.${usuarioId}`,
       },
       () => aoMudar()
@@ -273,38 +371,4 @@ export function assinarMudancas(usuarioId: string, aoMudar: () => void): () => v
   return () => { supabase?.removeChannel(canal); };
 }
 
-/**
- * Manda documentos para o servidor, num envio só.
- *
- * Cada linha substitui o documento INTEIRO do lado de lá — por isso nada
- * deve chamar isto antes de ter puxado e mesclado; quem envia primeiro
- * apaga o que o outro aparelho gravou.
- */
-export async function empurrarMuitas(chaves: string[]): Promise<void> {
-  if (!supabase || chaves.length === 0) return;
-  const sessao = (await supabase.auth.getSession()).data.session;
-  if (!sessao) return;
-
-  const linhas: { usuario_id: string; chave: string; dados: unknown }[] = [];
-  for (const chave of chaves) {
-    const dados = lerLocal(chave);
-    if (dados !== null) {
-      linhas.push({ usuario_id: sessao.user.id, chave, dados });
-    }
-  }
-
-  if (linhas.length === 0) return;
-
-  const { data, error } = await supabase
-    .from('documentos')
-    .upsert(linhas, { onConflict: 'usuario_id,chave' })
-    .select('chave, atualizado_em');
-
-  if (error) throw error;
-
-  if (data) {
-    (data as { chave: string; atualizado_em: string }[]).forEach(item => {
-      if (item.atualizado_em) marcarCarimbo(item.chave, item.atualizado_em);
-    });
-  }
-}
+export { DOC_INTEIRO };

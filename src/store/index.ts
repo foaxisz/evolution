@@ -59,24 +59,32 @@ export function limparErroDeGravacao(): void {
  * a gravação em silêncio.
  */
 /**
- * Avisado a cada gravação bem-sucedida, para a sincronização levar o
- * documento ao servidor.
+ * Avisado a cada gravação bem-sucedida, para a sincronização levar ao
+ * servidor o que mudou.
  *
  * Entra por injeção e não por import direto: o store é a base de tudo, e
  * fazê-lo importar a camada de rede criaria um ciclo — a sincronização
  * precisa ler o store. Assim o store continua sem saber que rede existe.
+ *
+ * Vai junto o conteúdo ANTERIOR, bruto. É o que permite à sincronização
+ * saber exatamente quais registros mudaram, e principalmente quais
+ * sumiram: o que estava lá antes e não está agora foi excluído. Sem isso,
+ * exclusão precisaria de marcação própria espalhada por todo o store — e
+ * qualquer `delete` que esquecesse de marcar viraria um registro que
+ * ressuscita, em silêncio.
  */
-let aoGravar: ((chave: string) => void) | null = null;
+let aoGravar: ((chave: string, anterior: string | null) => void) | null = null;
 
-export function observarGravacoes(f: (chave: string) => void): void {
+export function observarGravacoes(f: (chave: string, anterior: string | null) => void): void {
   aoGravar = f;
 }
 
 function save<T>(key: string, data: T): boolean {
   try {
+    const anterior = localStorage.getItem(key);
     localStorage.setItem(key, JSON.stringify(data));
     ultimoErroDeGravacao = null;
-    aoGravar?.(key);
+    aoGravar?.(key, anterior);
     return true;
   } catch (e) {
     const cheio =
@@ -90,84 +98,29 @@ function save<T>(key: string, data: T): boolean {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// Exclusões — as lápides
+// Exclusões
 // ══════════════════════════════════════════════════════════════════════
 //
-// Apagar um registro da lista não basta quando existem dois aparelhos. A
-// mescla da sincronização é a UNIÃO dos dois lados pelo `id`: o hábito que
-// você excluiu no PC volta da cópia do celular, e volta para sempre,
-// porque depois de ressuscitar ele é reenviado ao servidor.
+// Não há nada de especial a fazer aqui, e isso é de propósito.
 //
-// Some com o registro E deixa a marca: `{ id, em }`. A marca sincroniza
-// como qualquer outro documento, e quem a recebe poda o registro. É o
-// único jeito de "não existe mais" ser uma informação — sem ela, ausência
-// é indistinguível de "o outro aparelho ainda não me contou que criou".
+// Houve uma versão com "lápides": cada exclusão gravava `{ id, em }` num
+// documento à parte, porque a sincronização de então mesclava os dois
+// aparelhos pela UNIÃO dos registros — e união não sabe apagar, então o
+// hábito excluído no PC voltava da cópia do celular.
+//
+// A sincronização agora guarda um registro por linha no servidor, com
+// `excluido` como coluna, e descobre o que sumiu comparando o documento
+// com o que estava gravado antes. Exclusão virou consequência automática
+// da gravação. Todo `delete*` daqui só precisa tirar da lista.
 
-/** Quanto tempo a lápide fica de pé. */
-const VALIDADE_DA_LAPIDE_MS = 365 * 24 * 60 * 60 * 1000;
-
-export interface Lapide {
-  id: string;
-  em: string;
-}
-
-export function getExcluidos(): Lapide[] {
-  return load<Lapide[]>('evo_excluidos', []);
-}
-
-/** Só os ids, que é o que a poda precisa. */
-export function getIdsExcluidos(): Set<string> {
-  return new Set(getExcluidos().map(l => l.id));
-}
-
-/**
- * Registra que estes ids deixaram de existir.
- *
- * A limpeza de lápide vencida acontece aqui e não num trabalho de fundo:
- * um ano é folga suficiente para qualquer aparelho ter sincronizado, e
- * lápide eterna encheria o localStorage, que já é apertado. O risco é um
- * aparelho que fique um ano inteiro sem abrir ressuscitar o que apagou —
- * e nesse caso é melhor o dado voltar do que sumir sem explicação.
- */
-export function marcarExcluidos(ids: string[]): void {
-  if (ids.length === 0) return;
-
-  const agora = Date.now();
-  const em = new Date(agora).toISOString();
-  const vivas = getExcluidos().filter(l => {
-    const quando = Date.parse(l.em);
-    return Number.isNaN(quando) || agora - quando < VALIDADE_DA_LAPIDE_MS;
-  });
-
-  const conhecidos = new Set(vivas.map(l => l.id));
-  for (const id of ids) {
-    if (!conhecidos.has(id)) vivas.push({ id, em });
-  }
-
-  save('evo_excluidos', vivas);
-}
-
-/**
- * Tira da lista quem casa com `sai`, gravando a lápide de cada um.
- *
- * Todo `delete*` daqui passa por esta função. Um que filtre direto volta a
- * ter o bug do registro que ressuscita — e em silêncio, que é o pior jeito.
- */
+/** Tira da lista quem casa com `sai`. Não grava se nada saiu. */
 function excluirDe<T extends { id: string }>(
   chave: string,
   atuais: T[],
   sai: (registro: T) => boolean,
 ): void {
-  const ficam: T[] = [];
-  const idsFora: string[] = [];
-
-  for (const registro of atuais) {
-    if (sai(registro)) idsFora.push(registro.id);
-    else ficam.push(registro);
-  }
-
-  if (idsFora.length === 0) return;
-  marcarExcluidos(idsFora);
+  const ficam = atuais.filter(r => !sai(r));
+  if (ficam.length === atuais.length) return;
   save(chave, ficam);
 }
 
@@ -278,6 +231,7 @@ export function deleteHabit(id: string): void {
   // voltam da cópia do outro aparelho e ficam pendurados, apontando para
   // um hábito que não existe mais.
   excluirDe('evo_habit_logs', getHabitLogs(), l => l.habitId === id);
+  setDestaques(getDestaques().filter(d => d !== id));
 }
 
 // Habit Logs
@@ -290,10 +244,6 @@ export function toggleHabitLog(habitId: string, date: string): HabitLog[] {
   const existing = logs.findIndex(l => l.habitId === habitId && l.date === date);
   if (existing >= 0) {
     if (logs[existing].completed) {
-      // Desmarcar é excluir, e precisa de lápide como qualquer exclusão:
-      // sem ela o registro volta da cópia do outro aparelho e o hábito se
-      // remarca sozinho.
-      marcarExcluidos([logs[existing].id]);
       logs.splice(existing, 1);
     } else {
       logs[existing].completed = true;
@@ -333,11 +283,7 @@ export function incrementHabitCount(
   const novo = Math.max(0, atual + delta);
 
   if (novo === 0) {
-    // Zerar a contagem apaga o registro — mesma história da lápide.
-    if (idx >= 0) {
-      marcarExcluidos([logs[idx].id]);
-      logs.splice(idx, 1);
-    }
+    if (idx >= 0) logs.splice(idx, 1);
   } else {
     const completed = dailyTarget ? novo >= dailyTarget : true;
     if (idx >= 0) {
@@ -945,8 +891,10 @@ export function salvarMetasDaSemana(
   const cumpridas = (mudanca.cumpridas ?? atual?.cumpridas ?? []).filter(c => marcadores.includes(c));
 
   const outras = todas.filter(m => !(m.categoriaId === categoriaId && m.semana === semana));
+  const id = `${categoriaId}_${semana}`;
   if (marcadores.length || observacoes) {
     outras.push({
+      id,
       categoriaId, semana, marcadores,
       observacoes: observacoes || undefined,
       cumpridas: cumpridas.length ? cumpridas : undefined,

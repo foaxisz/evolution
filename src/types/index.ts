@@ -234,6 +234,7 @@ export interface MetasDoTrimestre {
 }
 
 export interface MetasDaSemana {
+  id?: string;
   categoriaId: string;
   /** Segunda-feira da semana, em YYYY-MM-DD. A semana vira no domingo à
    *  noite, então a chave é sempre a segunda que a abre. */
