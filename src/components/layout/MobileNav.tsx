@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { Page } from '../../types';
 import { useAutenticacao } from '../../lib/auth';
+import BotaoInstalarPWA from '../ui/BotaoInstalarPWA';
 
 interface NavItem {
   page: Page;
@@ -97,9 +98,9 @@ export default function MobileNav({ activePage, onNavigate }: MobileNavProps) {
             })}
           </ul>
 
-          {/* Só o botão. O e-mail saiu junto com o da barra lateral. */}
-          {email && (
-            <div className="border-t border-border px-4 py-3">
+          <div className="border-t border-border px-4 py-3 space-y-2">
+            <BotaoInstalarPWA />
+            {email && (
               <button
                 onClick={() => { setMaisAberto(false); sair(); }}
                 className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-danger"
@@ -107,8 +108,8 @@ export default function MobileNav({ activePage, onNavigate }: MobileNavProps) {
                 <LogOut size={13} />
                 Sair
               </button>
-            </div>
-          )}
+            )}
+          </div>
       </div>
 
       <nav className="crt-scanlines fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-bg-secondary md:hidden">

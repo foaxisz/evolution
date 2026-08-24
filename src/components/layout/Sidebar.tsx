@@ -13,6 +13,7 @@ import {
 import type { Page } from '../../types';
 import Logo from '../ui/Logo';
 import { useAutenticacao } from '../../lib/auth';
+import BotaoInstalarPWA from '../ui/BotaoInstalarPWA';
 
 interface NavItem {
   page: Page;
@@ -81,15 +82,12 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border px-5 py-4">
-        {/* Sem o e-mail: o app é de uso pessoal, num aparelho só seu — ver
-            o próprio endereço a cada tela não informa nada e ainda deixa
-            um dado à mostra para quem olhar por cima do ombro. A condição
-            continua sendo `email`, porque é ela que diz se há sessão. */}
+      <div className="border-t border-border px-5 py-4 space-y-3">
+        <BotaoInstalarPWA />
         {email && (
           <button
             onClick={sair}
-            className="mb-3 flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger"
+            className="flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger"
           >
             <LogOut size={12} />
             Sair
