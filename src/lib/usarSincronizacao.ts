@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { observarGravacoes } from '../store';
 import { supabase } from './supabase';
 import {
-  anotarGravacao, puxar, empurrar, primeiraCarga, assinarMudancas,
+  anotarGravacao, puxar, empurrar, primeiraCarga, jaSincronizou, assinarMudancas,
   type EstadoDaSincronizacao,
 } from './sincronizacao';
 
@@ -50,25 +50,46 @@ export function useSincronizacao(usuarioId: string | null) {
   const denovo = useRef(false);
 
   /**
-   * Um ciclo inteiro: puxa e envia.
+   * Um ciclo inteiro: ENVIAR e depois PUXAR.
    *
-   * Puxar ANTES de enviar não é mais questão de segurança — enviar não
-   * apaga nada agora — mas continua sendo a ordem certa: a tela mostra o
-   * que o outro aparelho fez o quanto antes.
+   * Essa ordem é o conserto do bug de exclusão que voltava. Puxando
+   * primeiro, o que a pessoa acabou de fazer ainda não estava no servidor,
+   * e era preciso um escudo para a resposta não desfazer isso na tela. O
+   * escudo ignorava as linhas dos registros na fila — e um registro preso
+   * na fila ficava surdo: a exclusão do outro aparelho era descartada, o
+   * registro seguia vivo aqui, e o envio seguinte o ressuscitava.
+   *
+   * Enviando primeiro, o escudo é desnecessário: quando a resposta chega, o
+   * nosso já está lá e volta idêntico. O que o outro fez depois tem carimbo
+   * maior e vence — inclusive exclusão.
+   *
+   * A exceção é a PRIMEIRA carga deste aparelho, que puxa tudo antes de
+   * decidir o que subir. Sem isso, um aparelho que ficou dias fechado
+   * republicaria como vivo tudo o que foi excluído nesse meio-tempo.
    *
    * A trava é necessária porque há quatro gatilhos e eles se sobrepõem; o
    * `denovo` garante que um aviso chegado no meio do ciclo não seja
    * perdido, só adiado até o fim dele.
    */
-  const ciclo = useCallback(async (primeira = false) => {
+  const ciclo = useCallback(async () => {
     if (!usuarioId) return;
     if (rodando.current) { denovo.current = true; return; }
 
     rodando.current = true;
     try {
       setEstado('enviando');
-      const mudadas = primeira ? await primeiraCarga() : await puxar();
-      await empurrar();
+
+      let mudadas: string[];
+      if (!jaSincronizou()) {
+        // Aparelho novo (ou depois de `recomecar`): baixa tudo, aplica, e
+        // só então marca o que é local e não está lá.
+        mudadas = await primeiraCarga();
+        await empurrar();
+      } else {
+        await empurrar();
+        mudadas = await puxar();
+      }
+
       // Só redesenha se algo de fato chegou — bump à toa remonta a árvore
       // inteira e faz a tela piscar.
       if (mudadas.length > 0) setVersao(v => v + 1);
@@ -93,7 +114,7 @@ export function useSincronizacao(usuarioId: string | null) {
   // Entrada no app.
   useEffect(() => {
     if (!usuarioId) return;
-    ciclo(true);
+    ciclo();
   }, [usuarioId, ciclo]);
 
   // O servidor avisa quando o outro aparelho grava. É isto que faz marcar

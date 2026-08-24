@@ -1,39 +1,46 @@
 import { supabase } from './supabase';
 import {
-  desmontar, diferenca, aplicar, paraEnviar, DOC_INTEIRO,
-  type LinhaRemota,
+  desmontar, diferenca, aplicar, paraEnviar, faltandoNoServidor, canonico,
+  DOC_INTEIRO, type LinhaRemota,
 } from './registros';
 
 /**
  * Sincronização entre aparelhos.
  *
- * O `localStorage` continua sendo o que a tela lê: o app abre instantâneo
- * e funciona offline, e nada aqui deixa a interface esperando rede. Esta
+ * O `localStorage` continua sendo o que a tela lê: o app abre instantâneo,
+ * funciona offline, e nada aqui deixa a interface esperando rede. Esta
  * camada leva o que mudou para o servidor e traz o que o outro aparelho
  * mexeu.
  *
- * ── O que mudou em relação ao desenho anterior ──
+ * ── A unidade é o REGISTRO ──
  *
- * Antes, o servidor guardava o documento inteiro numa linha e gravar
- * significava SUBSTITUIR esse documento. Isso torna a perda de dado
- * estrutural: entre ler e escrever existe uma janela, e o que o outro
- * aparelho gravou dentro dela é apagado por quem chegar depois. O cliente
- * remendava com uma união dos dois lados; união não sabe apagar, então
- * exclusão virou lápide, e lápide virou poda. O furo era o modelo.
+ * Uma linha por hábito, não um documento por coleção. Marcar um hábito
+ * escreve a linha dele e não encosta na do outro, então não existe janela
+ * entre ler e escrever em que o trabalho do outro aparelho possa ser
+ * apagado. Exclusão é a coluna `excluido` — estado, não ausência, porque
+ * ausência de linha é indistinguível de "ainda não me contaram que criou".
  *
- * Agora a unidade é o REGISTRO, uma linha por hábito, e por registro não
- * existe janela: marcar um hábito escreve a linha dele e não encosta na
- * do outro. Sem mescla, sem lápide, sem poda. Duas coisas só disputam
- * quando são o MESMO registro, e aí vence o carimbo mais novo do banco.
+ * ── A ordem do ciclo, que é onde estava o bug ──
  *
- * ── As três memórias ──
+ * ENVIAR e depois PUXAR. O contrário parecia mais seguro e era o oposito:
+ * puxando primeiro, o que a pessoa acabou de fazer ainda não estava no
+ * servidor, então era preciso um escudo para a resposta não desfazer na
+ * tela o que ela tinha feito. Esse escudo ignorava as linhas dos registros
+ * na fila — e um registro preso na fila ficava surdo para sempre: a
+ * exclusão vinda do outro aparelho era descartada, o registro seguia vivo
+ * aqui, e o envio seguinte o ressuscitava no servidor.
  *
- *  - `evo_sync_pendentes`: ids gravados aqui que ainda não subiram. Vive
- *    no localStorage, e não na memória, para sobreviver a fechar o app no
- *    meio — senão uma gravação feita offline se perderia calada.
+ * Enviando primeiro, o escudo é desnecessário: quando a resposta chega, o
+ * que fizemos já está lá e volta idêntico. E o que o outro aparelho fez
+ * DEPOIS do nosso envio tem carimbo maior e vence — inclusive exclusão.
+ *
+ * ── As duas memórias ──
+ *
+ *  - `evo_sync_pendentes`: ids gravados aqui que ainda não subiram. Vive no
+ *    localStorage, não na memória, para sobreviver a fechar o app no meio —
+ *    senão uma gravação feita offline se perderia calada.
  *  - `evo_sync_desde`: carimbo da linha mais nova que já vimos. É o que
- *    torna a puxada proporcional ao que mudou, e não ao tamanho do banco.
- *  - o próprio `localStorage` do app, que é a verdade da tela.
+ *    torna a puxada proporcional ao que mudou, não ao tamanho do banco.
  */
 
 /** Documentos que fazem sentido sincronizar. */
@@ -61,13 +68,9 @@ export type ChaveSincronizada = typeof CHAVES_SINCRONIZADAS[number];
 /**
  * Ficam de fora de propósito:
  * - `evo_foco_andamento`: cronômetro rodando AGORA, preso a este aparelho.
- *   Sincronizar faria o celular achar que tem um bloco em andamento que na
- *   verdade está correndo no PC.
  * - `evo_foco_cabine`: estado de janela, não é dado do usuário.
  * - `evo_dashboard_janela`: preferência de tela, por aparelho.
- * - `evo_excluidos`: as lápides do desenho anterior. Não existem mais —
- *   exclusão agora é a coluna `excluido` da linha. Se sobrou no aparelho,
- *   é lixo inofensivo.
+ * - `evo_excluidos`: lápides de um desenho antigo. Se sobrou, é lixo inerte.
  */
 
 export type EstadoDaSincronizacao = 'ocioso' | 'enviando' | 'erro' | 'desligada';
@@ -76,14 +79,38 @@ export function ehSincronizada(chave: string): chave is ChaveSincronizada {
   return (CHAVES_SINCRONIZADAS as readonly string[]).includes(chave);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// O que está guardado aqui
-// ══════════════════════════════════════════════════════════════════════
-
 const PENDENTES = 'evo_sync_pendentes';
 const DESDE = 'evo_sync_desde';
+const VERSAO_LOCAL = 'evo_sync_versao';
 
-/** Quantas linhas por requisição. Acima disso o Postgrest começa a doer. */
+/**
+ * Versão do estado local de sincronização.
+ *
+ * Subir este número faz cada aparelho descartar carimbo e fila na primeira
+ * abertura e refazer a carga completa. Existe porque o desenho anterior
+ * deixava lixo ATIVO no `localStorage`: um id preso na fila de envio, que
+ * bloqueava a exclusão vinda do outro aparelho e a ressuscitava no envio
+ * seguinte. Publicar só o conserto não bastaria — os aparelhos já em uso
+ * continuariam com a fila envenenada.
+ *
+ * Descartar isso é seguro: nada do que a pessoa tem é apagado. A carga
+ * completa baixa o servidor inteiro e depois sobe o que é local e não está
+ * lá; o pior caso é subir de novo algo que já estava igual.
+ */
+const VERSAO = '2';
+
+/** Roda uma vez por aparelho, na primeira chamada depois de atualizar. */
+function migrarEstadoLocal(): void {
+  if (localStorage.getItem(VERSAO_LOCAL) === VERSAO) return;
+  localStorage.removeItem(DESDE);
+  localStorage.removeItem(PENDENTES);
+  // Lápides do desenho de dois modelos atrás. Inertes, mas ocupam espaço.
+  localStorage.removeItem('evo_excluidos');
+  localStorage.removeItem('evo_sync_carimbos');
+  localStorage.setItem(VERSAO_LOCAL, VERSAO);
+}
+
+/** Quantas linhas por requisição. Acima disso o PostgREST começa a doer. */
 const LOTE = 500;
 
 function lerLocal(chave: string): unknown {
@@ -110,11 +137,16 @@ function gravarPendentes(p: Pendentes) {
   localStorage.setItem(PENDENTES, JSON.stringify(p));
 }
 
+function acrescentar(p: Pendentes, chave: string, ids: string[]) {
+  if (ids.length === 0) return;
+  p[chave] = [...new Set([...(p[chave] ?? []), ...ids])];
+}
+
 /**
  * Anota que estes registros mudaram aqui.
  *
- * Chamado pela gravação do store, com o valor anterior em mãos — daí sair
- * a exclusão de graça: o id que existia antes e não existe agora entra na
+ * Chamado pela gravação do store, com o valor anterior em mãos — daí sair a
+ * exclusão de graça: o id que existia antes e não existe agora entra na
  * fila igual, e na hora de enviar vira uma linha com `excluido`.
  */
 export function anotarGravacao(chave: string, anteriorBruto: string | null): boolean {
@@ -131,91 +163,9 @@ export function anotarGravacao(chave: string, anteriorBruto: string | null): boo
   if (ids.length === 0) return false;
 
   const p = pendentes();
-  p[chave] = [...new Set([...(p[chave] ?? []), ...ids])];
+  acrescentar(p, chave, ids);
   gravarPendentes(p);
   return true;
-}
-
-/** Marca o documento inteiro como pendente — usado na primeira carga. */
-function anotarTudo(chave: string) {
-  const ids = desmontar(lerLocal(chave)).map(r => r.id);
-  if (ids.length === 0) return;
-  const p = pendentes();
-  p[chave] = [...new Set([...(p[chave] ?? []), ...ids])];
-  gravarPendentes(p);
-}
-
-function idsPendentes(chave: string): Set<string> {
-  return new Set(pendentes()[chave] ?? []);
-}
-
-// ══════════════════════════════════════════════════════════════════════
-// Puxar
-// ══════════════════════════════════════════════════════════════════════
-
-/**
- * Traz do servidor tudo o que mudou desde a última vez.
- *
- * Devolve as chaves que mudaram aqui, para a interface se redesenhar.
- *
- * O carimbo só avança DEPOIS de aplicar tudo. Se cair a rede no meio, na
- * próxima vez o mesmo intervalo é pedido de novo — aplicar duas vezes a
- * mesma linha não faz diferença, mas pular uma faria.
- */
-export async function puxar(): Promise<string[]> {
-  if (!supabase) return [];
-
-  const desde = localStorage.getItem(DESDE);
-  const linhas: LinhaRemota[] = [];
-
-  // Paginado, e não com `limit`: cortar no meio de um carimbo repetido
-  // deixaria linhas para trás, porque a próxima busca começa depois dele.
-  for (let pagina = 0; ; pagina++) {
-    let consulta = supabase
-      .from('registros')
-      .select('colecao, registro_id, dados, excluido, atualizado_em')
-      .order('atualizado_em', { ascending: true })
-      .range(pagina * LOTE, (pagina + 1) * LOTE - 1);
-
-    if (desde) consulta = consulta.gt('atualizado_em', desde);
-
-    const { data, error } = await consulta;
-    if (error) throw error;
-
-    linhas.push(...(data as LinhaRemota[]));
-    if ((data as LinhaRemota[]).length < LOTE) break;
-  }
-
-  if (linhas.length === 0) return [];
-
-  const porColecao = new Map<string, LinhaRemota[]>();
-  for (const linha of linhas) {
-    if (!ehSincronizada(linha.colecao)) continue;
-    const lista = porColecao.get(linha.colecao);
-    if (lista) lista.push(linha);
-    else porColecao.set(linha.colecao, [linha]);
-  }
-
-  const mudadas: string[] = [];
-  for (const [chave, doColecao] of porColecao) {
-    const antes = lerLocal(chave);
-    const depois = aplicar(antes, doColecao, idsPendentes(chave));
-    if (depois === antes) continue;
-
-    if (depois === null) localStorage.removeItem(chave);
-    else localStorage.setItem(chave, JSON.stringify(depois));
-    mudadas.push(chave);
-  }
-
-  // O maior carimbo do lote — inclusive de coleção que ignoramos, senão
-  // uma chave fora da lista faria a mesma linha voltar para sempre.
-  const maior = linhas.reduce(
-    (a, l) => (l.atualizado_em > a ? l.atualizado_em : a),
-    desde ?? '',
-  );
-  if (maior) localStorage.setItem(DESDE, maior);
-
-  return mudadas;
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -229,8 +179,8 @@ export async function puxar(): Promise<string[]> {
  * gravou: o pior caso é dois aparelhos escreverem o MESMO registro, e aí
  * vence o carimbo do banco.
  *
- * A fila só é limpa depois do sucesso do lote, e só dos ids daquele lote:
- * uma gravação que aconteça no meio do envio continua pendente e sobe na
+ * A fila é relida depois do sucesso e só os ids daquele lote saem dela:
+ * uma gravação que aconteça durante o envio continua pendente e sobe na
  * rodada seguinte.
  */
 export async function empurrar(): Promise<void> {
@@ -257,7 +207,6 @@ export async function empurrar(): Promise<void> {
     if (error) throw error;
   }
 
-  // Relê: o que entrou na fila durante o envio precisa continuar lá.
   const agora = pendentes();
   for (const chave of chaves) {
     const subiram = new Set(p[chave]);
@@ -269,48 +218,127 @@ export async function empurrar(): Promise<void> {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// Primeira carga
+// Puxar
+// ══════════════════════════════════════════════════════════════════════
+
+/** Busca linhas do servidor, paginado. `desde` nulo traz tudo. */
+async function buscar(desde: string | null): Promise<LinhaRemota[]> {
+  if (!supabase) return [];
+  const linhas: LinhaRemota[] = [];
+
+  // Paginado, e não com `limit`: cortar no meio de um carimbo repetido
+  // deixaria linhas para trás, porque a próxima busca começa depois dele.
+  for (let pagina = 0; ; pagina++) {
+    let consulta = supabase
+      .from('registros')
+      .select('colecao, registro_id, dados, excluido, atualizado_em')
+      .order('atualizado_em', { ascending: true })
+      .range(pagina * LOTE, (pagina + 1) * LOTE - 1);
+
+    if (desde) consulta = consulta.gt('atualizado_em', desde);
+
+    const { data, error } = await consulta;
+    if (error) throw error;
+
+    const lote = data as LinhaRemota[];
+    linhas.push(...lote);
+    if (lote.length < LOTE) break;
+  }
+
+  return linhas;
+}
+
+/**
+ * Traz do servidor tudo o que mudou desde a última vez e aplica.
+ *
+ * Devolve as chaves que mudaram aqui, para a interface se redesenhar.
+ *
+ * O carimbo só avança DEPOIS de aplicar tudo. Se cair a rede no meio, o
+ * mesmo intervalo é pedido de novo na próxima vez — aplicar duas vezes a
+ * mesma linha não faz diferença, mas pular uma faria.
+ */
+export async function puxar(): Promise<string[]> {
+  if (!supabase) return [];
+
+  const desde = localStorage.getItem(DESDE);
+  const linhas = await buscar(desde);
+  if (linhas.length === 0) return [];
+
+  const mudadas = aplicarLinhas(linhas);
+
+  // O maior carimbo do lote — inclusive de coleção que ignoramos, senão
+  // uma chave fora da lista faria a mesma linha voltar para sempre.
+  const maior = linhas.reduce(
+    (a, l) => (l.atualizado_em > a ? l.atualizado_em : a),
+    desde ?? '',
+  );
+  if (maior) localStorage.setItem(DESDE, maior);
+
+  return mudadas;
+}
+
+function aplicarLinhas(linhas: LinhaRemota[]): string[] {
+  const porColecao = new Map<string, LinhaRemota[]>();
+  for (const linha of linhas) {
+    if (!ehSincronizada(linha.colecao)) continue;
+    const lista = porColecao.get(linha.colecao);
+    if (lista) lista.push(linha);
+    else porColecao.set(linha.colecao, [linha]);
+  }
+
+  const mudadas: string[] = [];
+  for (const [chave, doColecao] of porColecao) {
+    const antes = lerLocal(chave);
+    const depois = aplicar(antes, doColecao);
+    if (depois === antes) continue;
+
+    if (depois === null) localStorage.removeItem(chave);
+    else localStorage.setItem(chave, JSON.stringify(depois));
+    mudadas.push(chave);
+  }
+  return mudadas;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Primeira carga deste aparelho
 // ══════════════════════════════════════════════════════════════════════
 
 /**
- * A entrada no app, e a única parte que precisa de cuidado especial.
+ * A entrada de um aparelho que ainda não tem carimbo.
  *
- * Puxa tudo primeiro e só então decide o que subir, comparando registro a
- * registro com o que veio. Sem essa comparação, o aparelho reenviaria o
- * banco inteiro a cada abertura, e cada reenvio faria o outro aparelho
- * baixar tudo de novo — dois aparelhos se acordando em looping.
+ * Aqui a ordem se INVERTE de propósito: puxa o servidor inteiro e aplica
+ * ANTES de decidir o que subir. É o que impede a ressurreição — o registro
+ * excluído em outro aparelho já saiu do documento local quando a decisão
+ * de subir é tomada, então ele não é candidato.
  *
- * O que é local e não está lá sobe; o que é igual não sobe. O histórico
- * de quem já usava o app antes da conta entra por aqui, sem nada apagar.
+ * Fazendo o contrário, um aparelho que ficou dias sem abrir republicaria
+ * como vivo tudo o que foi excluído nesse meio-tempo.
+ *
+ * Depois disso, sobe só o que é local e o servidor não tem — o histórico
+ * de quem já usava o app antes de existir conta entra por aqui.
  */
 export async function primeiraCarga(): Promise<string[]> {
-  const mudadas = await puxar();
+  if (!supabase) return [];
 
-  if (!supabase) return mudadas;
+  const linhas = await buscar(null);
+  const mudadas = aplicarLinhas(linhas);
 
+  if (linhas.length > 0) {
+    const maior = linhas.reduce((a, l) => (l.atualizado_em > a ? l.atualizado_em : a), '');
+    if (maior) localStorage.setItem(DESDE, maior);
+  }
+
+  // Índice do que o servidor tem, em forma canônica — a comparação por
+  // `JSON.stringify` cru sempre falhava, porque o Postgres reordena as
+  // chaves do `jsonb`.
   const remotos = new Map<string, string>();
-  for (let pagina = 0; ; pagina++) {
-    const { data, error } = await supabase
-      .from('registros')
-      .select('colecao, registro_id, dados, excluido')
-      .range(pagina * LOTE, (pagina + 1) * LOTE - 1);
-    if (error) throw error;
-
-    for (const l of data as LinhaRemota[]) {
-      remotos.set(`${l.colecao} ${l.registro_id}`, l.excluido ? ' excluido' : JSON.stringify(l.dados));
-    }
-    if ((data as LinhaRemota[]).length < LOTE) break;
+  for (const l of linhas) {
+    remotos.set(`${l.colecao} ${l.registro_id}`, l.excluido ? ' excluido' : canonico(l.dados));
   }
 
   const p = pendentes();
   for (const chave of CHAVES_SINCRONIZADAS) {
-    const faltando = desmontar(lerLocal(chave))
-      .filter(r => remotos.get(`${chave} ${r.id}`) !== JSON.stringify(r.dados))
-      .map(r => r.id);
-
-    if (faltando.length > 0) {
-      p[chave] = [...new Set([...(p[chave] ?? []), ...faltando])];
-    }
+    acrescentar(p, chave, faltandoNoServidor(lerLocal(chave), remotos, chave));
   }
   gravarPendentes(p);
 
@@ -318,19 +346,30 @@ export async function primeiraCarga(): Promise<string[]> {
 }
 
 /**
+ * Este aparelho já sincronizou alguma vez?
+ *
+ * O carimbo é a prova. Sem ele, a entrada precisa da carga completa.
+ */
+export function jaSincronizou(): boolean {
+  // A migração roda aqui porque este é o primeiro ponto que todo ciclo
+  // consulta — não há como esquecer de chamá-la.
+  migrarEstadoLocal();
+  return localStorage.getItem(DESDE) !== null;
+}
+
+/**
  * Recomeça do zero, sem apagar nada.
  *
- * Esquece o carimbo e marca tudo o que está aqui para subir. É a saída
- * para quando os dois lados divergirem por qualquer motivo — a próxima
- * sincronização baixa o servidor inteiro e sobe o aparelho inteiro, e a
- * união dos dois é o resultado, porque nada aqui apaga por omissão.
+ * Esquece o carimbo e a fila. A próxima sincronização faz a carga completa:
+ * baixa o servidor inteiro, aplica, e só então sobe o que é local e não
+ * está lá. É a saída para quando os dois lados divergirem.
  */
 export function recomecar(): void {
   localStorage.removeItem(DESDE);
-  for (const chave of CHAVES_SINCRONIZADAS) anotarTudo(chave);
+  localStorage.removeItem(PENDENTES);
 }
 
-/** Quantos registros ainda não subiram. Só para o diagnóstico da tela. */
+/** Quantos registros ainda não subiram. Só para diagnóstico. */
 export function quantosPendentes(): number {
   return Object.values(pendentes()).reduce((n, ids) => n + (ids?.length ?? 0), 0);
 }
@@ -342,14 +381,13 @@ export function quantosPendentes(): number {
 /**
  * Avisa quando o outro aparelho grava, sem esperar o próximo ciclo.
  *
- * O filtro por `usuario_id` é o que mantém o canal privado. Também chega
- * evento das NOSSAS gravações — e tudo bem: a puxada que ele dispara pede
- * só o que é mais novo que o nosso carimbo, e o que acabamos de escrever
- * já está aqui.
+ * O filtro por `usuario_id` mantém o canal privado. Também chega evento das
+ * NOSSAS gravações — e tudo bem: a puxada que ele dispara pede só o que é
+ * mais novo que o nosso carimbo.
  *
- * Se o Realtime não estiver ligado na tabela, a inscrição nunca dispara e
- * a vigia por tempo continua cobrindo. Por isso nada aqui lança erro: é
- * um acelerador, não a fundação.
+ * Se o Realtime não estiver ligado na tabela, a inscrição nunca dispara e a
+ * vigia por tempo continua cobrindo. Por isso nada aqui lança erro: é um
+ * acelerador, não a fundação.
  */
 export function assinarMudancas(usuarioId: string, aoMudar: () => void): () => void {
   if (!supabase) return () => {};
@@ -371,4 +409,4 @@ export function assinarMudancas(usuarioId: string, aoMudar: () => void): () => v
   return () => { supabase?.removeChannel(canal); };
 }
 
-export { DOC_INTEIRO };
+export { DOC_INTEIRO, desmontar };
