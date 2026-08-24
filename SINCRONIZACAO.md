@@ -88,7 +88,18 @@ Pronto:
 - **Indicador de estado** — aparece só quando está enviando ou falhou
 - **PWA** — instalável, com ícone próprio e cache offline
 
-Falta **um comando seu** para criar a tabela. Veja "Passo 5".
+A tabela `documentos` já existe no projeto, com RLS ativa — conferido pela
+API (anônimo não lê nada).
+
+### O bug que fazia nada sincronizar (corrigido)
+
+A carga inicial **enviava antes de puxar**. Como cada envio substitui o
+documento inteiro no servidor, o aparelho que abrisse por último apagava
+lá o que o outro tinha gravado — antes de sequer ler. A mescla por
+registro estava certa, mas nunca via o dado do outro lado.
+
+A ordem agora é **puxar → mesclar → enviar**, e o envio fica travado até a
+primeira puxada dar certo (offline, a fila só acumula; nada se perde).
 
 ### Uma decisão de projeto que mudou
 
@@ -107,7 +118,7 @@ não reescrever tudo.
 A resolução de conflito continua **por registro**, como estava planejado:
 união dos dois lados pelo `id`, e só no mesmo `id` há disputa.
 
-## Passo 5 — Autorizar a CLI ← **você, agora**
+## Passo 5 — Autorizar a CLI ✔ feito (tabela criada)
 
 Criar tabela exige credencial que altera schema, e a chave publishable
 não serve (a API responde `Secret API key required`). A secret key não

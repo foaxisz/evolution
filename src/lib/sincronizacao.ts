@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { mesclar } from './mesclar';
+import { planejar, type Cabecalho } from './planejar';
 
 /**
  * Sincronização entre aparelhos.
@@ -86,75 +87,142 @@ function marcarCarimbo(chave: string, quando: string) {
   localStorage.setItem(CARIMBOS, JSON.stringify(c));
 }
 
+export interface ResultadoDaPuxada {
+  /** Documentos que mudaram AQUI — a interface precisa se redesenhar. */
+  mudadas: string[];
+  /**
+   * Documentos que precisam subir: ou o servidor não os tem, ou a mescla
+   * produziu algo diferente do que está lá.
+   *
+   * Existe para não reenviar às cegas tudo o que já está igual no
+   * servidor. Cada envio sobrescreve o documento inteiro, então quanto
+   * menos envio desnecessário, menor a janela em que o outro aparelho
+   * pode gravar entre a nossa leitura e a nossa escrita.
+   */
+  aEnviar: string[];
+}
+
+/** Mescla um documento do servidor no local. Devolve o que aconteceu. */
+function absorver(doc: Documento, locais: Record<string, string>) {
+  const local = lerLocal(doc.chave);
+
+  if (local === null) {
+    localStorage.setItem(doc.chave, JSON.stringify(doc.dados));
+    marcarCarimbo(doc.chave, doc.atualizado_em);
+    return { mudou: true, precisaEnviar: false };
+  }
+
+  const carimboLocal = locais[doc.chave];
+  const remotoMaisNovo = !carimboLocal || doc.atualizado_em > carimboLocal;
+  const unido = mesclar(local, doc.dados, remotoMaisNovo);
+
+  const antes = JSON.stringify(local);
+  const depois = JSON.stringify(unido);
+  if (antes !== depois) localStorage.setItem(doc.chave, depois);
+  marcarCarimbo(doc.chave, doc.atualizado_em);
+
+  return {
+    mudou: antes !== depois,
+    // A mescla é uma união: se o resultado difere do que veio de lá, é
+    // porque este aparelho tem algo que o servidor não tem.
+    precisaEnviar: depois !== JSON.stringify(doc.dados),
+  };
+}
+
 /**
  * Traz o servidor para cá, mesclando com o que já existe.
  *
- * Roda na entrada e sempre que a aba volta ao foco. Devolve as chaves que
- * mudaram, para a interface saber que precisa se redesenhar.
+ * Duas velocidades, e a diferença importa porque isto roda a cada poucos
+ * segundos:
+ *
+ *  - `completo` (na entrada): baixa todos os documentos e compara
+ *    conteúdo. É a varredura que conserta qualquer desencontro deixado por
+ *    um envio que falhou numa sessão anterior.
+ *  - padrão (vigia e foco): baixa só `chave, atualizado_em` — poucas
+ *    centenas de bytes — e só busca o `dados` de quem está mais novo lá do
+ *    que o carimbo daqui. Sem isso, vigiar de 10 em 10 segundos baixaria o
+ *    banco inteiro o tempo todo, no 4G da pessoa.
  */
-export async function puxar(): Promise<string[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('documentos')
-    .select('chave, dados, atualizado_em');
+export async function puxar(completo = false): Promise<ResultadoDaPuxada> {
+  if (!supabase) return { mudadas: [], aEnviar: [] };
 
-  if (error) throw error;
-
-  const mudadas: string[] = [];
   const locais = carimbos();
+  const mudadas: string[] = [];
+  const aEnviar: string[] = [];
 
-  (data as Documento[]).forEach(doc => {
-    if (!CHAVES_SINCRONIZADAS.includes(doc.chave as typeof CHAVES_SINCRONIZADAS[number])) return;
-
-    const local = lerLocal(doc.chave);
-    if (local === null) {
-      localStorage.setItem(doc.chave, JSON.stringify(doc.dados));
-      marcarCarimbo(doc.chave, doc.atualizado_em);
-      mudadas.push(doc.chave);
-      return;
-    }
-
-    const carimboLocal = locais[doc.chave];
-    const remotoMaisNovo = !carimboLocal || doc.atualizado_em > carimboLocal;
-    const unido = mesclar(local, doc.dados, remotoMaisNovo);
-
-    const antes = JSON.stringify(local);
-    const depois = JSON.stringify(unido);
-    if (antes !== depois) {
-      localStorage.setItem(doc.chave, depois);
-      mudadas.push(doc.chave);
-    }
-    marcarCarimbo(doc.chave, doc.atualizado_em);
-  });
-
-  return mudadas;
-}
-
-/** Manda um documento para o servidor. */
-export async function empurrar(chave: string): Promise<void> {
-  if (!supabase) return;
-  const sessao = (await supabase.auth.getSession()).data.session;
-  if (!sessao) return;
-
-  const dados = lerLocal(chave);
-  if (dados === null) return;
-
-  const { data, error } = await supabase
+  const { data: cabecalhos, error: erroCabecalhos } = await supabase
     .from('documentos')
-    .upsert(
-      { usuario_id: sessao.user.id, chave, dados },
-      { onConflict: 'usuario_id,chave' }
-    )
-    .select('atualizado_em')
-    .single();
+    .select('chave, atualizado_em');
+  if (erroCabecalhos) throw erroCabecalhos;
 
-  if (error) throw error;
-  // Guarda o carimbo do BANCO, não o daqui: é ele que a próxima mescla
-  // compara, e relógio de aparelho não é confiável.
-  if (data?.atualizado_em) marcarCarimbo(chave, data.atualizado_em);
+  const { baixar, subir } = planejar(
+    cabecalhos as Cabecalho[],
+    locais,
+    chave => lerLocal(chave) !== null,
+    CHAVES_SINCRONIZADAS,
+    completo,
+  );
+
+  // Documento que só existe aqui ainda não subiu nenhuma vez.
+  aEnviar.push(...subir);
+
+  if (baixar.length > 0) {
+    const { data, error } = await supabase
+      .from('documentos')
+      .select('chave, dados, atualizado_em')
+      .in('chave', baixar);
+    if (error) throw error;
+
+    (data as Documento[]).forEach(doc => {
+      const r = absorver(doc, locais);
+      if (r.mudou) mudadas.push(doc.chave);
+      if (r.precisaEnviar) aEnviar.push(doc.chave);
+    });
+  }
+
+  return { mudadas, aEnviar };
 }
 
-/** Manda múltiplos documentos de uma vez para o servidor. */
+/**
+ * Avisa quando o outro aparelho grava, sem esperar o próximo ciclo.
+ *
+ * O filtro por `usuario_id` é o que mantém o canal privado: sem ele o
+ * servidor mandaria evento de linha alheia. Também chega evento das
+ * NOSSAS próprias gravações — e tudo bem: a puxada que ele dispara é a
+ * versão barata, e nada lá é mais novo que o nosso carimbo, então não faz
+ * trabalho nenhum.
+ *
+ * Se o Realtime não estiver ligado na tabela, a inscrição simplesmente
+ * nunca dispara e a vigia por tempo continua cobrindo. Por isso nada aqui
+ * lança erro: é um acelerador, não a fundação.
+ */
+export function assinarMudancas(usuarioId: string, aoMudar: () => void): () => void {
+  if (!supabase) return () => {};
+
+  const canal = supabase
+    .channel(`documentos:${usuarioId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'documentos',
+        filter: `usuario_id=eq.${usuarioId}`,
+      },
+      () => aoMudar()
+    )
+    .subscribe();
+
+  return () => { supabase?.removeChannel(canal); };
+}
+
+/**
+ * Manda documentos para o servidor, num envio só.
+ *
+ * Cada linha substitui o documento INTEIRO do lado de lá — por isso nada
+ * deve chamar isto antes de ter puxado e mesclado; quem envia primeiro
+ * apaga o que o outro aparelho gravou.
+ */
 export async function empurrarMuitas(chaves: string[]): Promise<void> {
   if (!supabase || chaves.length === 0) return;
   const sessao = (await supabase.auth.getSession()).data.session;
@@ -182,9 +250,4 @@ export async function empurrarMuitas(chaves: string[]): Promise<void> {
       if (item.atualizado_em) marcarCarimbo(item.chave, item.atualizado_em);
     });
   }
-}
-
-/** Manda tudo — usado no primeiro login e carga inicial em um único envio bulk. */
-export async function empurrarTudo(): Promise<void> {
-  await empurrarMuitas([...CHAVES_SINCRONIZADAS]);
 }

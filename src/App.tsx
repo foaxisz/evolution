@@ -54,7 +54,7 @@ function AppInterno() {
   // `versao` sobe quando a sincronização traz dado de outro aparelho. Como
   // as páginas leem o store na montagem, remontá-las pela `key` é o jeito
   // mais simples de refletir o que chegou sem espalhar estado por todas.
-  const { estado, versao } = useSincronizacao(!!sessao);
+  const { estado, versao } = useSincronizacao(sessao?.user.id ?? null);
 
   const renderPage = () => {
     switch (activePage) {

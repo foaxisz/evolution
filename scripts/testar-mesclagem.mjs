@@ -1,4 +1,5 @@
 import { mesclar } from '../src/lib/mesclar.ts';
+import { planejar } from '../src/lib/planejar.ts';
 
 /**
  * Teste da mesclagem da sincronização.
@@ -52,6 +53,82 @@ verificar('objeto: remoto mais novo vence',
   mesclar({ a: 1 }, { a: 2 }, true), { a: 2 });
 verificar('objeto: local mais novo vence',
   mesclar({ a: 1 }, { a: 2 }, false), { a: 1 });
+
+console.log('\nO que baixar do servidor:');
+const CHAVES = ['evo_habits', 'evo_reviews'];
+const temTudo = () => true;
+
+verificar('carimbo mais velho que o servidor: baixa',
+  planejar([{ chave: 'evo_habits', atualizado_em: '2026-08-24T10:00:00Z' }],
+    { evo_habits: '2026-08-24T09:00:00Z' }, temTudo, CHAVES, false).baixar,
+  ['evo_habits']);
+verificar('carimbo igual: não baixa de novo',
+  planejar([{ chave: 'evo_habits', atualizado_em: '2026-08-24T10:00:00Z' }],
+    { evo_habits: '2026-08-24T10:00:00Z' }, temTudo, CHAVES, false).baixar,
+  []);
+verificar('nunca sincronizado aqui: baixa',
+  planejar([{ chave: 'evo_habits', atualizado_em: '2026-08-24T10:00:00Z' }],
+    {}, temTudo, CHAVES, false).baixar,
+  ['evo_habits']);
+verificar('sem cópia local: baixa mesmo com carimbo igual',
+  planejar([{ chave: 'evo_habits', atualizado_em: '2026-08-24T10:00:00Z' }],
+    { evo_habits: '2026-08-24T10:00:00Z' }, () => false, CHAVES, false).baixar,
+  ['evo_habits']);
+verificar('entrada no app baixa tudo, carimbo à parte',
+  planejar([{ chave: 'evo_habits', atualizado_em: '2026-08-24T10:00:00Z' }],
+    { evo_habits: '2026-08-24T10:00:00Z' }, temTudo, CHAVES, true).baixar,
+  ['evo_habits']);
+verificar('chave de fora da lista é ignorada',
+  planejar([{ chave: 'evo_foco_andamento', atualizado_em: '2026-08-24T10:00:00Z' }],
+    {}, temTudo, CHAVES, false).baixar,
+  []);
+verificar('documento que só existe aqui precisa subir',
+  planejar([], {}, c => c === 'evo_reviews', CHAVES, false).subir,
+  ['evo_reviews']);
+
+console.log('\nDuas voltas entre celular e PC (a ordem que estava errada):');
+{
+  // Servidor de mentira, com o mesmo contrato do real: cada chave guarda
+  // documento inteiro e um carimbo que só o servidor escreve.
+  let relogio = 0;
+  const servidor = new Map();
+  const gravar = (chave, dados) => servidor.set(chave, { dados, em: String(++relogio).padStart(4, '0') });
+
+  // Um aparelho: guarda local + carimbos, e sincroniza na ORDEM do app —
+  // puxa, mescla, e só então sobe o resultado da mescla.
+  const aparelho = (local = []) => ({ local, carimbo: null });
+  const sincronizar = ap => {
+    const doServidor = servidor.get('evo_habits');
+    if (doServidor) {
+      const remotoMaisNovo = !ap.carimbo || doServidor.em > ap.carimbo;
+      ap.local = mesclar(ap.local, doServidor.dados, remotoMaisNovo);
+      ap.carimbo = doServidor.em;
+      if (JSON.stringify(ap.local) === JSON.stringify(doServidor.dados)) return;
+    }
+    gravar('evo_habits', ap.local);
+    ap.carimbo = servidor.get('evo_habits').em;
+  };
+
+  const pc = aparelho([{ id: 'h1' }]);
+  const cel = aparelho([{ id: 'h2' }]);
+
+  sincronizar(pc);
+  sincronizar(cel);
+  verificar('celular recebe o hábito criado no PC', cel.local.map(h => h.id).sort(), ['h1', 'h2']);
+
+  sincronizar(pc);
+  verificar('PC recebe o hábito criado no celular', pc.local.map(h => h.id).sort(), ['h1', 'h2']);
+
+  cel.local = [...cel.local, { id: 'h3' }];
+  sincronizar(cel);
+  sincronizar(pc);
+  verificar('mudança posterior no celular chega ao PC', pc.local.map(h => h.id).sort(), ['h1', 'h2', 'h3']);
+
+  pc.local = [...pc.local, { id: 'h4' }];
+  sincronizar(pc);
+  sincronizar(cel);
+  verificar('e a do PC chega ao celular', cel.local.map(h => h.id).sort(), ['h1', 'h2', 'h3', 'h4']);
+}
 
 console.log(falhas === 0 ? '\nTodos passaram.' : `\n${falhas} falha(s).`);
 process.exit(falhas === 0 ? 0 : 1);
