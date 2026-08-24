@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { mesclar } from './mesclar';
+import { mesclar, podar } from './mesclar';
 import { planejar, type Cabecalho } from './planejar';
 
 /**
@@ -40,7 +40,13 @@ export const CHAVES_SINCRONIZADAS = [
   'evo_foco_metas_semana',
   'evo_destaques',
   'evo_foco_ajustes',
+  // As lápides. Precisa sincronizar como qualquer outro documento — é ela
+  // que carrega a informação "isto foi excluído" para o outro aparelho.
+  'evo_excluidos',
 ] as const;
+
+/** Documento das lápides — o único com tratamento especial na puxada. */
+const EXCLUIDOS = 'evo_excluidos';
 
 /**
  * Ficam de fora de propósito:
@@ -100,6 +106,34 @@ export interface ResultadoDaPuxada {
    * pode gravar entre a nossa leitura e a nossa escrita.
    */
   aEnviar: string[];
+}
+
+/**
+ * Aplica as lápides a todos os documentos guardados aqui.
+ *
+ * Devolve as chaves que perderam algum registro — precisam ser
+ * redesenhadas e reenviadas, senão o servidor continua com o registro
+ * excluído e o outro aparelho o traz de volta na próxima puxada.
+ */
+function podarTudo(): string[] {
+  const excluidos = new Set(
+    ((lerLocal(EXCLUIDOS) as { id: string }[] | null) ?? [])
+      .filter(l => l && typeof l.id === 'string')
+      .map(l => l.id)
+  );
+  if (excluidos.size === 0) return [];
+
+  const podadas: string[] = [];
+  for (const chave of CHAVES_SINCRONIZADAS) {
+    if (chave === EXCLUIDOS) continue;
+    const local = lerLocal(chave);
+    const depois = podar(local, excluidos);
+    if (depois !== local) {
+      localStorage.setItem(chave, JSON.stringify(depois));
+      podadas.push(chave);
+    }
+  }
+  return podadas;
 }
 
 /** Mescla um documento do servidor no local. Devolve o que aconteceu. */
@@ -173,11 +207,34 @@ export async function puxar(completo = false): Promise<ResultadoDaPuxada> {
       .in('chave', baixar);
     if (error) throw error;
 
-    (data as Documento[]).forEach(doc => {
+    const docs = data as Documento[];
+
+    // As lápides primeiro, sempre. Elas são o que decide se um registro
+    // que chegou no mesmo lote deve entrar ou ser podado — absorvê-las
+    // depois deixaria o registro excluído aparecer por um ciclo.
+    const ordenados = [
+      ...docs.filter(d => d.chave === EXCLUIDOS),
+      ...docs.filter(d => d.chave !== EXCLUIDOS),
+    ];
+
+    ordenados.forEach(doc => {
       const r = absorver(doc, locais);
       if (r.mudou) mudadas.push(doc.chave);
       if (r.precisaEnviar) aEnviar.push(doc.chave);
     });
+  }
+
+  // Poda no fim, sobre TUDO o que está gravado aqui — e não só sobre o que
+  // veio agora: a lápide pode ter chegado numa puxada anterior e o
+  // registro ressuscitado estar parado no localStorage desde então.
+  //
+  // Só quando algo desceu, porém. Ressuscitar é coisa que só a mescla faz,
+  // então puxada que não trouxe nada não tem o que podar — e varrer os
+  // dezesseis documentos de dez em dez segundos à toa custaria bateria.
+  // Qualquer sobra é pega pela varredura completa da entrada no app.
+  for (const chave of baixar.length > 0 ? podarTudo() : []) {
+    if (!mudadas.includes(chave)) mudadas.push(chave);
+    if (!aEnviar.includes(chave)) aEnviar.push(chave);
   }
 
   return { mudadas, aEnviar };

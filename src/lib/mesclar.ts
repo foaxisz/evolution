@@ -54,3 +54,20 @@ export function mesclar(local: unknown, remoto: unknown, remotoMaisNovo: boolean
 
   return remotoMaisNovo ? remoto : local;
 }
+
+/**
+ * Tira da lista os registros que foram excluídos.
+ *
+ * A união do `mesclar` não sabe apagar: ela só soma os dois lados. Sem
+ * esta poda, o hábito excluído no PC volta da cópia do celular na
+ * primeira sincronização — e volta em definitivo, porque logo em seguida
+ * é reenviado ao servidor como se fosse novidade.
+ *
+ * Devolve o MESMO valor quando nada sai, para quem chama conseguir
+ * distinguir "podei" de "não havia o que podar" sem comparar JSON.
+ */
+export function podar(dados: unknown, excluidos: Set<string>): unknown {
+  if (excluidos.size === 0 || !ehListaComId(dados)) return dados;
+  const ficam = dados.filter(r => !excluidos.has(r.id));
+  return ficam.length === dados.length ? dados : ficam;
+}

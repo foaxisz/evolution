@@ -1,4 +1,4 @@
-import { mesclar } from '../src/lib/mesclar.ts';
+import { mesclar, podar } from '../src/lib/mesclar.ts';
 import { planejar } from '../src/lib/planejar.ts';
 
 /**
@@ -85,6 +85,53 @@ verificar('chave de fora da lista é ignorada',
 verificar('documento que só existe aqui precisa subir',
   planejar([], {}, c => c === 'evo_reviews', CHAVES, false).subir,
   ['evo_reviews']);
+
+console.log('\nExclusão (as lápides):');
+verificar('registro excluído sai da lista',
+  podar([{ id: 'a' }, { id: 'b' }], new Set(['a'])), [{ id: 'b' }]);
+verificar('sem lápide nada muda',
+  podar([{ id: 'a' }], new Set()), [{ id: 'a' }]);
+verificar('lápide de id que não está aqui não atrapalha',
+  podar([{ id: 'a' }], new Set(['z'])), [{ id: 'a' }]);
+verificar('documento que não é lista com id passa intacto',
+  podar({ a: 1 }, new Set(['a'])), { a: 1 });
+verificar('a união ressuscita, e a poda desfaz',
+  podar(mesclar([], [{ id: 'a' }], true), new Set(['a'])), []);
+
+console.log('\nO hábito que ficava voltando:');
+{
+  // Duas listas: os hábitos e as lápides. Ambas sincronizam pelo mesmo
+  // caminho — é o que faz "isto foi excluído" atravessar os aparelhos.
+  const servidor = { habits: [{ id: 'h1' }], excluidos: [] };
+  const sincronizar = ap => {
+    ap.excluidos = mesclar(ap.excluidos, servidor.excluidos, true);
+    const ids = new Set(ap.excluidos.map(l => l.id));
+    ap.habits = podar(mesclar(ap.habits, servidor.habits, true), ids);
+    servidor.excluidos = ap.excluidos;
+    servidor.habits = podar(servidor.habits, ids);
+  };
+
+  const pc = { habits: [], excluidos: [] };
+  const cel = { habits: [], excluidos: [] };
+
+  sincronizar(pc);
+  sincronizar(cel);
+  verificar('os dois têm o hábito antes de excluir',
+    [pc.habits.length, cel.habits.length], [1, 1]);
+
+  // PC exclui: some da lista E deixa a lápide.
+  pc.habits = [];
+  pc.excluidos = [{ id: 'h1', em: '2026-08-24' }];
+  sincronizar(pc);
+  verificar('sai do servidor', servidor.habits, []);
+
+  // O celular ainda tem a cópia dele — é exatamente aqui que voltava.
+  sincronizar(cel);
+  verificar('NÃO volta no celular', cel.habits, []);
+
+  sincronizar(pc);
+  verificar('NÃO volta no PC no ciclo seguinte', pc.habits, []);
+}
 
 console.log('\nDuas voltas entre celular e PC (a ordem que estava errada):');
 {

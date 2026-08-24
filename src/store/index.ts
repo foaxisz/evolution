@@ -89,6 +89,88 @@ function save<T>(key: string, data: T): boolean {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// Exclusões — as lápides
+// ══════════════════════════════════════════════════════════════════════
+//
+// Apagar um registro da lista não basta quando existem dois aparelhos. A
+// mescla da sincronização é a UNIÃO dos dois lados pelo `id`: o hábito que
+// você excluiu no PC volta da cópia do celular, e volta para sempre,
+// porque depois de ressuscitar ele é reenviado ao servidor.
+//
+// Some com o registro E deixa a marca: `{ id, em }`. A marca sincroniza
+// como qualquer outro documento, e quem a recebe poda o registro. É o
+// único jeito de "não existe mais" ser uma informação — sem ela, ausência
+// é indistinguível de "o outro aparelho ainda não me contou que criou".
+
+/** Quanto tempo a lápide fica de pé. */
+const VALIDADE_DA_LAPIDE_MS = 365 * 24 * 60 * 60 * 1000;
+
+export interface Lapide {
+  id: string;
+  em: string;
+}
+
+export function getExcluidos(): Lapide[] {
+  return load<Lapide[]>('evo_excluidos', []);
+}
+
+/** Só os ids, que é o que a poda precisa. */
+export function getIdsExcluidos(): Set<string> {
+  return new Set(getExcluidos().map(l => l.id));
+}
+
+/**
+ * Registra que estes ids deixaram de existir.
+ *
+ * A limpeza de lápide vencida acontece aqui e não num trabalho de fundo:
+ * um ano é folga suficiente para qualquer aparelho ter sincronizado, e
+ * lápide eterna encheria o localStorage, que já é apertado. O risco é um
+ * aparelho que fique um ano inteiro sem abrir ressuscitar o que apagou —
+ * e nesse caso é melhor o dado voltar do que sumir sem explicação.
+ */
+export function marcarExcluidos(ids: string[]): void {
+  if (ids.length === 0) return;
+
+  const agora = Date.now();
+  const em = new Date(agora).toISOString();
+  const vivas = getExcluidos().filter(l => {
+    const quando = Date.parse(l.em);
+    return Number.isNaN(quando) || agora - quando < VALIDADE_DA_LAPIDE_MS;
+  });
+
+  const conhecidos = new Set(vivas.map(l => l.id));
+  for (const id of ids) {
+    if (!conhecidos.has(id)) vivas.push({ id, em });
+  }
+
+  save('evo_excluidos', vivas);
+}
+
+/**
+ * Tira da lista quem casa com `sai`, gravando a lápide de cada um.
+ *
+ * Todo `delete*` daqui passa por esta função. Um que filtre direto volta a
+ * ter o bug do registro que ressuscita — e em silêncio, que é o pior jeito.
+ */
+function excluirDe<T extends { id: string }>(
+  chave: string,
+  atuais: T[],
+  sai: (registro: T) => boolean,
+): void {
+  const ficam: T[] = [];
+  const idsFora: string[] = [];
+
+  for (const registro of atuais) {
+    if (sai(registro)) idsFora.push(registro.id);
+    else ficam.push(registro);
+  }
+
+  if (idsFora.length === 0) return;
+  marcarExcluidos(idsFora);
+  save(chave, ficam);
+}
+
 /** Uso aproximado do localStorage em bytes e percentual do teto de ~5MB. */
 export function getUsoDoArmazenamento(): { bytes: number; percentual: number } {
   let bytes = 0;
@@ -191,10 +273,11 @@ export function saveHabit(habit: Omit<Habit, 'id' | 'createdAt'> & { id?: string
 }
 
 export function deleteHabit(id: string): void {
-  const habits = getHabits().filter(h => h.id !== id);
-  save('evo_habits', habits);
-  const logs = getHabitLogs().filter(l => l.habitId !== id);
-  save('evo_habit_logs', logs);
+  excluirDe('evo_habits', getHabits(), h => h.id === id);
+  // Os registros do hábito também precisam de lápide própria: sem ela
+  // voltam da cópia do outro aparelho e ficam pendurados, apontando para
+  // um hábito que não existe mais.
+  excluirDe('evo_habit_logs', getHabitLogs(), l => l.habitId === id);
 }
 
 // Habit Logs
@@ -207,6 +290,10 @@ export function toggleHabitLog(habitId: string, date: string): HabitLog[] {
   const existing = logs.findIndex(l => l.habitId === habitId && l.date === date);
   if (existing >= 0) {
     if (logs[existing].completed) {
+      // Desmarcar é excluir, e precisa de lápide como qualquer exclusão:
+      // sem ela o registro volta da cópia do outro aparelho e o hábito se
+      // remarca sozinho.
+      marcarExcluidos([logs[existing].id]);
       logs.splice(existing, 1);
     } else {
       logs[existing].completed = true;
@@ -246,7 +333,11 @@ export function incrementHabitCount(
   const novo = Math.max(0, atual + delta);
 
   if (novo === 0) {
-    if (idx >= 0) logs.splice(idx, 1);
+    // Zerar a contagem apaga o registro — mesma história da lápide.
+    if (idx >= 0) {
+      marcarExcluidos([logs[idx].id]);
+      logs.splice(idx, 1);
+    }
   } else {
     const completed = dailyTarget ? novo >= dailyTarget : true;
     if (idx >= 0) {
@@ -292,8 +383,8 @@ export function saveChallenge(challenge: Omit<Challenge, 'id' | 'createdAt' | 'c
 }
 
 export function deleteChallenge(id: string): void {
-  save('evo_challenges', getChallenges().filter(c => c.id !== id));
-  save('evo_challenge_logs', getChallengeLogs().filter(l => l.challengeId !== id));
+  excluirDe('evo_challenges', getChallenges(), c => c.id === id);
+  excluirDe('evo_challenge_logs', getChallengeLogs(), l => l.challengeId === id);
 }
 
 export function incrementChallenge(id: string, amount: number, note?: string): Challenge | null {
@@ -339,7 +430,7 @@ export function saveReview(review: Omit<Review, 'id'> & { id?: string }): Review
 }
 
 export function deleteReview(id: string): void {
-  save('evo_reviews', getReviews().filter(r => r.id !== id));
+  excluirDe('evo_reviews', getReviews(), r => r.id === id);
 }
 
 // Cookie Jar
@@ -364,7 +455,7 @@ export function updateCookieJarEntry(id: string, patch: Partial<Omit<CookieJarEn
 }
 
 export function deleteCookieJarEntry(id: string): void {
-  save('evo_cookies', getCookieJarEntries().filter(e => e.id !== id));
+  excluirDe('evo_cookies', getCookieJarEntries(), e => e.id === id);
 }
 
 // Shopping
@@ -397,7 +488,7 @@ export function updateInteracao(id: string, patch: Partial<Interacao>): void {
 }
 
 export function deleteInteracao(id: string): void {
-  save('evo_interacoes', load<Interacao[]>('evo_interacoes', []).filter(i => i.id !== id));
+  excluirDe('evo_interacoes', load<Interacao[]>('evo_interacoes', []), i => i.id === id);
 }
 
 /**
@@ -468,7 +559,8 @@ export function saveShoppingCategory(
 
 /** Exclui a categoria e solta os itens dela — nunca apaga itens junto. */
 export function deleteShoppingCategory(id: string): void {
-  save('evo_shopping_categories', getShoppingCategories().filter(c => c.id !== id));
+  excluirDe('evo_shopping_categories', getShoppingCategories(), c => c.id === id);
+  // Os itens não são excluídos, só perdem a categoria — nada de lápide.
   const items = getShoppingItems().map(i =>
     i.categoryId === id ? { ...i, categoryId: undefined } : i
   );
@@ -514,7 +606,7 @@ export function toggleShoppingItem(id: string): void {
 }
 
 export function deleteShoppingItem(id: string): void {
-  save('evo_shopping', getShoppingItems().filter(i => i.id !== id));
+  excluirDe('evo_shopping', getShoppingItems(), i => i.id === id);
 }
 
 // ── Categorias de foco ────────────────────────────────────────────────
@@ -551,7 +643,7 @@ export function saveCategoriaDeFoco(
 /** Exclui a categoria e solta o que pertencia a ela — nunca apaga
  *  sessão nem ação junto: o tempo focado é histórico, não some. */
 export function deleteCategoriaDeFoco(id: string): void {
-  save('evo_foco_categorias', getCategoriasDeFoco().filter(c => c.id !== id));
+  excluirDe('evo_foco_categorias', getCategoriasDeFoco(), c => c.id === id);
   save('evo_foco_sessoes', getSessoesDeFoco().map(s =>
     s.categoriaId === id ? { ...s, categoriaId: undefined } : s
   ));
@@ -575,7 +667,7 @@ export function addSessaoDeFoco(sessao: Omit<SessaoDeFoco, 'id'>): SessaoDeFoco 
 }
 
 export function deleteSessaoDeFoco(id: string): void {
-  save('evo_foco_sessoes', getSessoesDeFoco().filter(s => s.id !== id));
+  excluirDe('evo_foco_sessoes', getSessoesDeFoco(), s => s.id === id);
 }
 
 /**
@@ -689,7 +781,7 @@ export function toggleAction(id: string): void {
 
 
 export function deleteAction(id: string): void {
-  save('evo_actions', getActions().filter(a => a.id !== id));
+  excluirDe('evo_actions', getActions(), a => a.id === id);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -802,7 +894,7 @@ export function salvarMetasDeTrimestre(
 }
 
 export function deleteMetasDeTrimestre(id: string): void {
-  save('evo_foco_metas_trimestre', getMetasDeTrimestre().filter(m => m.id !== id));
+  excluirDe('evo_foco_metas_trimestre', getMetasDeTrimestre(), m => m.id === id);
 }
 
 /** Marca ou desmarca uma meta do trimestre como cumprida. Só o histórico
