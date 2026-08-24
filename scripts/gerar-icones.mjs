@@ -4,13 +4,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Gerador de ícones PWA de alta definição com antialiasing supersampled.
- * Gera ícones modernos, com gradientes suaves e iluminação neon para iOS/Android/Desktop.
+ * Gerador do ícone PWA da Evolution baseado na seta/gráfico do Favicon (SVG).
+ * Renderiza o símbolo exato da aba (linha ascendente com nó brilhante no topo)
+ * sobre um fundo roxo neon escuro e elegante, com antialiasing supersampled 2x.
  */
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// CRC32 para empacotamento PNG puro
 const TABELA_CRC = (() => {
   const t = new Int32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -61,7 +61,6 @@ function paraPNG(pixels, largura, altura) {
   ]);
 }
 
-// Interpolação de cores em HSL / RGB
 function lerpColor(c1, c2, t) {
   const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
   const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
@@ -70,12 +69,10 @@ function lerpColor(c1, c2, t) {
   return [r, g, b, a];
 }
 
-// Cria buffer de imagem em alta definição
 function criarBuffer(w, h) {
   return { dados: Buffer.alloc(w * h * 4), w, h };
 }
 
-// Blend alpha compositing
 function blendPixel(buf, x, y, [r, g, b, a]) {
   if (x < 0 || y < 0 || x >= buf.w || y >= buf.h || a <= 0) return;
   const i = (Math.floor(y) * buf.w + Math.floor(x)) * 4;
@@ -90,143 +87,179 @@ function blendPixel(buf, x, y, [r, g, b, a]) {
   buf.dados[i + 3] = Math.round(outA * 255);
 }
 
-// Desenha gradiente radial / fundo com brilho
-function preencherFundoGradiente(buf) {
+// Distância de um ponto P a um segmento A-B
+function distPontoSegmento(px, py, ax, ay, bx, by) {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const l2 = vx * vx + vy * vy;
+  if (l2 === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * vx + (py - ay) * vy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  const projX = ax + t * vx;
+  const projY = ay + t * vy;
+  return Math.hypot(px - projX, py - projY);
+}
+
+// Distância a uma polilinha
+function distPontoPolilinha(px, py, pontos) {
+  let minDist = Infinity;
+  for (let i = 0; i < pontos.length - 1; i++) {
+    const d = distPontoSegmento(
+      px,
+      py,
+      pontos[i][0],
+      pontos[i][1],
+      pontos[i + 1][0],
+      pontos[i + 1][1]
+    );
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+// Preenche o fundo roxo com iluminação radial elegante
+function desenharFundo(buf) {
   const cx = buf.w / 2;
   const cy = buf.h / 2;
-  const maxR = Math.sqrt(cx * cx + cy * cy);
+  const maxR = Math.hypot(cx, cy);
 
-  const corCentro = [26, 16, 50, 255]; // #1a1032
-  const corBorda = [10, 7, 20, 255];  // #0a0714
-  const corBrilho = [139, 92, 246, 75]; // Neon purple aura
+  const corCentro = [32, 16, 68, 255]; // Roxo vibrante profundo (#201044)
+  const corBorda = [14, 8, 30, 255];   // Roxo escuro fechado (#0e081e)
+  const auraGlow = [168, 85, 247, 90]; // Brilho neon (#a855f7)
 
   for (let y = 0; y < buf.h; y++) {
     for (let x = 0; x < buf.w; x++) {
       const dx = x - cx;
       const dy = y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = Math.hypot(dx, dy);
       const factor = Math.min(1, dist / maxR);
-      
+
       const bg = lerpColor(corCentro, corBorda, factor);
       blendPixel(buf, x, y, bg);
 
-      // Adiciona aura brilhante no centro
-      const glowFactor = Math.max(0, 1 - dist / (buf.w * 0.45));
+      // Brilho difuso em volta do centro/seta
+      const glowFactor = Math.max(0, 1 - dist / (buf.w * 0.5));
       if (glowFactor > 0) {
-        const glow = [corBrilho[0], corBrilho[1], corBrilho[2], Math.round(corBrilho[3] * glowFactor * glowFactor)];
+        const glow = [auraGlow[0], auraGlow[1], auraGlow[2], Math.round(auraGlow[3] * glowFactor * glowFactor)];
         blendPixel(buf, x, y, glow);
       }
     }
   }
 }
 
-// Retângulo com cantos arredondados e gradiente vertical
-function desenharRetanguloArredondado(buf, x0, y0, x1, y1, raio, corTopo, corBase) {
-  for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
-    const py = (y - y0) / (y1 - y0);
-    const cor = lerpColor(corTopo, corBase, py);
-
-    for (let x = Math.floor(x0); x <= Math.ceil(x1); x++) {
-      let dx = 0;
-      let dy = 0;
-
-      if (x < x0 + raio) dx = (x0 + raio) - x;
-      else if (x > x1 - raio) dx = x - (x1 - raio);
-
-      if (y < y0 + raio) dy = (y0 + raio) - y;
-      else if (y > y1 - raio) dy = y - (y1 - raio);
-
-      const d2 = dx * dx + dy * dy;
-      const r2 = raio * raio;
-
-      if (d2 <= r2) {
-        blendPixel(buf, x, y, cor);
-      } else if (d2 <= (raio + 1) * (raio + 1)) {
-        // Antialiasing nas bordas do canto
-        const alphaCov = 1 - (Math.sqrt(d2) - raio);
-        if (alphaCov > 0) {
-          const corAA = [cor[0], cor[1], cor[2], Math.round(cor[3] * alphaCov)];
-          blendPixel(buf, x, y, corAA);
-        }
-      }
-    }
-  }
-}
-
-// Desenha a logo da Evolution em alta definição
-function desenharLogoEvolution(buf, escala = 1.0) {
+// Desenha o gráfico da seta (M5 25 L12 15 L18 19 L26 7) com iluminação
+function desenharSetaFavicon(buf, escala = 1.0) {
   const size = buf.w;
   const artSize = size * escala;
   const ox = (size - artSize) / 2;
   const oy = (size - artSize) / 2;
 
-  // 4 barras subindo com gradiente e topo iluminado
-  const barras = [
-    { h: 0.32, topo: [168, 85, 247, 255], base: [109, 40, 217, 255] },
-    { h: 0.52, topo: [192, 132, 252, 255], base: [124, 58, 237, 255] },
-    { h: 0.72, topo: [216, 180, 254, 255], base: [139, 92, 246, 255] },
-    { h: 0.96, topo: [244, 114, 182, 255], base: [168, 85, 247, 255] }, // Barra final rosa neon acesa
+  // Pontos exatos do SVG da aba escalados
+  const svgPoints = [
+    [5, 25],
+    [12, 15],
+    [18, 19],
+    [26, 7],
   ];
 
-  const barW = artSize * 0.16;
-  const gap = artSize * 0.07;
-  const totalW = barras.length * barW + (barras.length - 1) * gap;
-  const startX = ox + (artSize - totalW) / 2;
-  const baseY = oy + artSize * 0.88;
-  const cornerRadius = barW * 0.45;
+  const pontos = svgPoints.map(([sx, sy]) => [
+    ox + (sx / 32) * artSize,
+    oy + (sy / 32) * artSize,
+  ]);
 
-  // Sombra / brilho suave sob as barras
-  barras.forEach((b, i) => {
-    const x = startX + i * (barW + gap);
-    const topY = baseY - artSize * 0.76 * b.h;
-    const glowCor = [b.topo[0], b.topo[1], b.topo[2], 50];
-    desenharRetanguloArredondado(
-      buf,
-      x - barW * 0.15,
-      topY - barW * 0.15,
-      x + barW * 1.15,
-      baseY + barW * 0.1,
-      cornerRadius * 1.3,
-      glowCor,
-      glowCor
-    );
-  });
+  const espessura = artSize * 0.11;
+  const raioStroke = espessura / 2;
 
-  // Barras principais
-  barras.forEach((b, i) => {
-    const x = startX + i * (barW + gap);
-    const topY = baseY - artSize * 0.76 * b.h;
-    desenharRetanguloArredondado(
-      buf,
-      x,
-      topY,
-      x + barW,
-      baseY,
-      cornerRadius,
-      b.topo,
-      b.base
-    );
-  });
+  const corRoxoBase = [124, 58, 237, 255];  // #7c3aed
+  const corRoxoMedio = [168, 85, 247, 255]; // #a855f7
+  const corRoxoTopo = [224, 170, 255, 255]; // #e0aaff
 
-  // Brilho estrela / luz na ponta da 4ª barra
-  const peakX = startX + 3 * (barW + gap) + barW / 2;
-  const peakY = baseY - artSize * 0.76 * 0.96;
-  const starRadius = barW * 0.6;
-  
-  for (let y = Math.floor(peakY - starRadius); y <= Math.ceil(peakY + starRadius); y++) {
-    for (let x = Math.floor(peakX - starRadius); x <= Math.ceil(peakX + starRadius); x++) {
-      const dx = Math.abs(x - peakX);
-      const dy = Math.abs(y - peakY);
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < starRadius) {
-        const intense = Math.pow(1 - dist / starRadius, 2);
-        blendPixel(buf, x, y, [255, 255, 255, Math.round(220 * intense)]);
+  const boundMinX = Math.floor(ox - espessura * 2);
+  const boundMaxX = Math.ceil(ox + artSize + espessura * 2);
+  const boundMinY = Math.floor(oy - espessura * 2);
+  const boundMaxY = Math.ceil(oy + artSize + espessura * 2);
+
+  // 1. Halo translúcido externo (Glow)
+  const raioGlow = raioStroke * 2.6;
+  for (let y = boundMinY; y <= boundMaxY; y++) {
+    for (let x = boundMinX; x <= boundMaxX; x++) {
+      const d = distPontoPolilinha(x, y, pontos);
+      if (d <= raioGlow) {
+        const factor = Math.pow(1 - d / raioGlow, 1.8);
+        const tX = (x - ox) / artSize;
+        const cor = lerpColor(corRoxoBase, corRoxoTopo, Math.min(1, Math.max(0, tX)));
+        const glowPixel = [cor[0], cor[1], cor[2], Math.round(110 * factor)];
+        blendPixel(buf, x, y, glowPixel);
+      }
+    }
+  }
+
+  // 2. Traçado principal da seta
+  for (let y = boundMinY; y <= boundMaxY; y++) {
+    for (let x = boundMinX; x <= boundMaxX; x++) {
+      const d = distPontoPolilinha(x, y, pontos);
+      if (d <= raioStroke + 1) {
+        let alpha = 1;
+        if (d > raioStroke) {
+          alpha = 1 - (d - raioStroke);
+        }
+
+        const tX = (x - ox) / artSize;
+        let cor = lerpColor(corRoxoBase, corRoxoMedio, tX * 1.2);
+        if (tX > 0.6) {
+          cor = lerpColor(corRoxoMedio, corRoxoTopo, (tX - 0.6) / 0.4);
+        }
+
+        const corFinal = [cor[0], cor[1], cor[2], Math.round(cor[3] * alpha)];
+        blendPixel(buf, x, y, corFinal);
+      }
+    }
+  }
+
+  // 3. Núcleo aceso central da linha (brilho interno)
+  const raioCore = raioStroke * 0.4;
+  for (let y = boundMinY; y <= boundMaxY; y++) {
+    for (let x = boundMinX; x <= boundMaxX; x++) {
+      const d = distPontoPolilinha(x, y, pontos);
+      if (d <= raioCore + 1) {
+        let alpha = 1;
+        if (d > raioCore) alpha = 1 - (d - raioCore);
+        const corCore = [255, 240, 255, Math.round(180 * alpha)];
+        blendPixel(buf, x, y, corCore);
+      }
+    }
+  }
+
+  // 4. Nó circular no topo da seta (ponto 26, 7)
+  const peak = pontos[3];
+  const nodeRadius = artSize * 0.13;
+  const nodeGlowRadius = nodeRadius * 2.0;
+
+  // Glow do nó
+  for (let y = Math.floor(peak[1] - nodeGlowRadius); y <= Math.ceil(peak[1] + nodeGlowRadius); y++) {
+    for (let x = Math.floor(peak[0] - nodeGlowRadius); x <= Math.ceil(peak[0] + nodeGlowRadius); x++) {
+      const d = Math.hypot(x - peak[0], y - peak[1]);
+      if (d <= nodeGlowRadius) {
+        const factor = Math.pow(1 - d / nodeGlowRadius, 2);
+        blendPixel(buf, x, y, [232, 180, 255, Math.round(150 * factor)]);
+      }
+    }
+  }
+
+  // Círculo interno do nó
+  for (let y = Math.floor(peak[1] - nodeRadius); y <= Math.ceil(peak[1] + nodeRadius); y++) {
+    for (let x = Math.floor(peak[0] - nodeRadius); x <= Math.ceil(peak[0] + nodeRadius); x++) {
+      const d = Math.hypot(x - peak[0], y - peak[1]);
+      if (d <= nodeRadius + 1) {
+        let alpha = 1;
+        if (d > nodeRadius) alpha = 1 - (d - nodeRadius);
+        const corNo = lerpColor([232, 175, 255, 255], [255, 255, 255, 255], (nodeRadius - d) / nodeRadius);
+        blendPixel(buf, x, y, [corNo[0], corNo[1], corNo[2], Math.round(corNo[3] * alpha)]);
       }
     }
   }
 }
 
-// Corta cantos em formato de ícone de app (squircle)
 function aplicarSquircle(buf, raioFracao = 0.22) {
   const r = buf.w * raioFracao;
   const w = buf.w;
@@ -252,7 +285,6 @@ function aplicarSquircle(buf, raioFracao = 0.22) {
   }
 }
 
-// Downsample com box-filtering 2x2 para Antialiasing perfeito
 function downsample2x(hiresBuf) {
   const targetW = hiresBuf.w / 2;
   const targetH = hiresBuf.h / 2;
@@ -283,12 +315,11 @@ function downsample2x(hiresBuf) {
 }
 
 function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
-  // Renderiza em 2x de resolução para supersampling perfeito
   const superLado = ladoTarget * 2;
   const superBuf = criarBuffer(superLado, superLado);
 
-  preencherFundoGradiente(superBuf);
-  desenharLogoEvolution(superBuf, escalaArte);
+  desenharFundo(superBuf);
+  desenharSetaFavicon(superBuf, escalaArte);
 
   if (raioSquircle > 0) {
     aplicarSquircle(superBuf, raioSquircle);
@@ -303,11 +334,11 @@ function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
 }
 
 const resultados = [
-  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.65, raioSquircle: 0.22 }),
-  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.65, raioSquircle: 0.22 }),
-  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.52, raioSquircle: 0 }),
-  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.62, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.72, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.72, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.58, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.68, raioSquircle: 0 }),
 ];
 
-console.log('Ícones PWA HD gerados em public/:');
+console.log('Ícones PWA Seta Favicon HD gerados em public/:');
 resultados.forEach(r => console.log('  ✓ ' + r));
