@@ -1,6 +1,7 @@
 import type { Page } from '../../types';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
+import { BannerInstalarPWA } from '../ui/BotaoInstalarPWA';
 
 interface LayoutProps {
   activePage: Page;
@@ -26,6 +27,7 @@ export default function Layout({ activePage, onNavigate, children }: LayoutProps
           'pb-16 md:pb-0',
         ].join(' ')}
       >
+        <BannerInstalarPWA />
         {/* Sem container aqui: cada página define a própria largura e o
             próprio respiro. Assim uma página pode ocupar a tela inteira. */}
         {children}
