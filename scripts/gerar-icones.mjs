@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Gerador do ícone PWA da Evolution baseado na seta/gráfico do Favicon (SVG).
- * Renderiza o símbolo exato da aba (linha ascendente com nó brilhante no topo)
- * sobre um fundo roxo neon escuro e elegante, com antialiasing supersampled 2x.
+ * Gerador do ícone PWA da Evolution - Versão Limpa e Básica.
+ * Desenha a seta ascendente limpa (linha com cantos arredondados, sem nós ou esferas),
+ * centralizada sobre um fundo roxo vibrante elegante.
  */
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -117,44 +117,28 @@ function distPontoPolilinha(px, py, pontos) {
   return minDist;
 }
 
-// Preenche o fundo roxo com iluminação radial elegante
-function desenharFundo(buf) {
-  const cx = buf.w / 2;
-  const cy = buf.h / 2;
-  const maxR = Math.hypot(cx, cy);
-
-  const corCentro = [32, 16, 68, 255]; // Roxo vibrante profundo (#201044)
-  const corBorda = [14, 8, 30, 255];   // Roxo escuro fechado (#0e081e)
-  const auraGlow = [168, 85, 247, 90]; // Brilho neon (#a855f7)
+// Fundo roxo limpo, elegante e moderno
+function desenharFundoRoxo(buf) {
+  const corTopo = [124, 58, 237, 255]; // #7c3aed
+  const corBase = [76, 29, 149, 255];  // #4c1d95
 
   for (let y = 0; y < buf.h; y++) {
+    const t = y / buf.h;
+    const bg = lerpColor(corTopo, corBase, t);
     for (let x = 0; x < buf.w; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const dist = Math.hypot(dx, dy);
-      const factor = Math.min(1, dist / maxR);
-
-      const bg = lerpColor(corCentro, corBorda, factor);
       blendPixel(buf, x, y, bg);
-
-      // Brilho difuso em volta do centro/seta
-      const glowFactor = Math.max(0, 1 - dist / (buf.w * 0.5));
-      if (glowFactor > 0) {
-        const glow = [auraGlow[0], auraGlow[1], auraGlow[2], Math.round(auraGlow[3] * glowFactor * glowFactor)];
-        blendPixel(buf, x, y, glow);
-      }
     }
   }
 }
 
-// Desenha o gráfico da seta (M5 25 L12 15 L18 19 L26 7) com iluminação
-function desenharSetaFavicon(buf, escala = 1.0) {
+// Desenha a seta limpa (linha branca pura com terminações arredondadas)
+function desenharSetaLimpa(buf, escala = 0.65) {
   const size = buf.w;
   const artSize = size * escala;
   const ox = (size - artSize) / 2;
   const oy = (size - artSize) / 2;
 
-  // Pontos exatos do SVG da aba escalados
+  // Pontos da seta (gráfico ascendente limpo)
   const svgPoints = [
     [5, 25],
     [12, 15],
@@ -167,34 +151,17 @@ function desenharSetaFavicon(buf, escala = 1.0) {
     oy + (sy / 32) * artSize,
   ]);
 
-  const espessura = artSize * 0.11;
+  const espessura = artSize * 0.13;
   const raioStroke = espessura / 2;
-
-  const corRoxoBase = [124, 58, 237, 255];  // #7c3aed
-  const corRoxoMedio = [168, 85, 247, 255]; // #a855f7
-  const corRoxoTopo = [224, 170, 255, 255]; // #e0aaff
 
   const boundMinX = Math.floor(ox - espessura * 2);
   const boundMaxX = Math.ceil(ox + artSize + espessura * 2);
   const boundMinY = Math.floor(oy - espessura * 2);
   const boundMaxY = Math.ceil(oy + artSize + espessura * 2);
 
-  // 1. Halo translúcido externo (Glow)
-  const raioGlow = raioStroke * 2.6;
-  for (let y = boundMinY; y <= boundMaxY; y++) {
-    for (let x = boundMinX; x <= boundMaxX; x++) {
-      const d = distPontoPolilinha(x, y, pontos);
-      if (d <= raioGlow) {
-        const factor = Math.pow(1 - d / raioGlow, 1.8);
-        const tX = (x - ox) / artSize;
-        const cor = lerpColor(corRoxoBase, corRoxoTopo, Math.min(1, Math.max(0, tX)));
-        const glowPixel = [cor[0], cor[1], cor[2], Math.round(110 * factor)];
-        blendPixel(buf, x, y, glowPixel);
-      }
-    }
-  }
+  // Seta em branco puro (#ffffff) com antialiasing perfeito
+  const corLinha = [255, 255, 255, 255];
 
-  // 2. Traçado principal da seta
   for (let y = boundMinY; y <= boundMaxY; y++) {
     for (let x = boundMinX; x <= boundMaxX; x++) {
       const d = distPontoPolilinha(x, y, pontos);
@@ -204,57 +171,8 @@ function desenharSetaFavicon(buf, escala = 1.0) {
           alpha = 1 - (d - raioStroke);
         }
 
-        const tX = (x - ox) / artSize;
-        let cor = lerpColor(corRoxoBase, corRoxoMedio, tX * 1.2);
-        if (tX > 0.6) {
-          cor = lerpColor(corRoxoMedio, corRoxoTopo, (tX - 0.6) / 0.4);
-        }
-
-        const corFinal = [cor[0], cor[1], cor[2], Math.round(cor[3] * alpha)];
+        const corFinal = [corLinha[0], corLinha[1], corLinha[2], Math.round(255 * alpha)];
         blendPixel(buf, x, y, corFinal);
-      }
-    }
-  }
-
-  // 3. Núcleo aceso central da linha (brilho interno)
-  const raioCore = raioStroke * 0.4;
-  for (let y = boundMinY; y <= boundMaxY; y++) {
-    for (let x = boundMinX; x <= boundMaxX; x++) {
-      const d = distPontoPolilinha(x, y, pontos);
-      if (d <= raioCore + 1) {
-        let alpha = 1;
-        if (d > raioCore) alpha = 1 - (d - raioCore);
-        const corCore = [255, 240, 255, Math.round(180 * alpha)];
-        blendPixel(buf, x, y, corCore);
-      }
-    }
-  }
-
-  // 4. Nó circular no topo da seta (ponto 26, 7)
-  const peak = pontos[3];
-  const nodeRadius = artSize * 0.13;
-  const nodeGlowRadius = nodeRadius * 2.0;
-
-  // Glow do nó
-  for (let y = Math.floor(peak[1] - nodeGlowRadius); y <= Math.ceil(peak[1] + nodeGlowRadius); y++) {
-    for (let x = Math.floor(peak[0] - nodeGlowRadius); x <= Math.ceil(peak[0] + nodeGlowRadius); x++) {
-      const d = Math.hypot(x - peak[0], y - peak[1]);
-      if (d <= nodeGlowRadius) {
-        const factor = Math.pow(1 - d / nodeGlowRadius, 2);
-        blendPixel(buf, x, y, [232, 180, 255, Math.round(150 * factor)]);
-      }
-    }
-  }
-
-  // Círculo interno do nó
-  for (let y = Math.floor(peak[1] - nodeRadius); y <= Math.ceil(peak[1] + nodeRadius); y++) {
-    for (let x = Math.floor(peak[0] - nodeRadius); x <= Math.ceil(peak[0] + nodeRadius); x++) {
-      const d = Math.hypot(x - peak[0], y - peak[1]);
-      if (d <= nodeRadius + 1) {
-        let alpha = 1;
-        if (d > nodeRadius) alpha = 1 - (d - nodeRadius);
-        const corNo = lerpColor([232, 175, 255, 255], [255, 255, 255, 255], (nodeRadius - d) / nodeRadius);
-        blendPixel(buf, x, y, [corNo[0], corNo[1], corNo[2], Math.round(corNo[3] * alpha)]);
       }
     }
   }
@@ -318,8 +236,8 @@ function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
   const superLado = ladoTarget * 2;
   const superBuf = criarBuffer(superLado, superLado);
 
-  desenharFundo(superBuf);
-  desenharSetaFavicon(superBuf, escalaArte);
+  desenharFundoRoxo(superBuf);
+  desenharSetaLimpa(superBuf, escalaArte);
 
   if (raioSquircle > 0) {
     aplicarSquircle(superBuf, raioSquircle);
@@ -334,11 +252,11 @@ function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
 }
 
 const resultados = [
-  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.72, raioSquircle: 0.22 }),
-  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.72, raioSquircle: 0.22 }),
-  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.58, raioSquircle: 0 }),
-  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.68, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.65, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.65, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.55, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.62, raioSquircle: 0 }),
 ];
 
-console.log('Ícones PWA Seta Favicon HD gerados em public/:');
+console.log('Ícones PWA Seta Limpa gerados em public/:');
 resultados.forEach(r => console.log('  ✓ ' + r));
