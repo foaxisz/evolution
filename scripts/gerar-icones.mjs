@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Gerador do ícone PWA da Evolution - Versão Limpa e Básica.
- * Desenha a seta ascendente limpa (linha com cantos arredondados, sem nós ou esferas),
- * centralizada sobre um fundo roxo vibrante elegante.
+ * Gerador de Ícones PWA - Evolution.
+ * Seta roxa neon acesa sobre fundo roxo escuro elegante.
+ * Linha contínua limpa (sem esferas/bolas no topo), exatamente como o print do favicon.
  */
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,7 +41,7 @@ function paraPNG(pixels, largura, altura) {
   ihdr.writeUInt32BE(largura, 0);
   ihdr.writeUInt32BE(altura, 4);
   ihdr[8] = 8;
-  ihdr[9] = 6; // RGBA
+  ihdr[9] = 6;
   ihdr[10] = 0;
   ihdr[11] = 0;
   ihdr[12] = 0;
@@ -87,7 +87,6 @@ function blendPixel(buf, x, y, [r, g, b, a]) {
   buf.dados[i + 3] = Math.round(outA * 255);
 }
 
-// Distância de um ponto P a um segmento A-B
 function distPontoSegmento(px, py, ax, ay, bx, by) {
   const vx = bx - ax;
   const vy = by - ay;
@@ -100,7 +99,6 @@ function distPontoSegmento(px, py, ax, ay, bx, by) {
   return Math.hypot(px - projX, py - projY);
 }
 
-// Distância a uma polilinha
 function distPontoPolilinha(px, py, pontos) {
   let minDist = Infinity;
   for (let i = 0; i < pontos.length - 1; i++) {
@@ -117,28 +115,35 @@ function distPontoPolilinha(px, py, pontos) {
   return minDist;
 }
 
-// Fundo roxo limpo, elegante e moderno
-function desenharFundoRoxo(buf) {
-  const corTopo = [124, 58, 237, 255]; // #7c3aed
-  const corBase = [76, 29, 149, 255];  // #4c1d95
+// Fundo Roxo Escuro Profundo e Elegante (#0f0a21 -> #180c35)
+function desenharFundoRoxoEscuro(buf) {
+  const cx = buf.w / 2;
+  const cy = buf.h / 2;
+  const maxR = Math.hypot(cx, cy);
+
+  const corCentro = [28, 14, 56, 255]; // Roxo escuro centro (#1c0e38)
+  const corBorda = [13, 7, 26, 255];   // Roxo escuro borda (#0d071a)
 
   for (let y = 0; y < buf.h; y++) {
-    const t = y / buf.h;
-    const bg = lerpColor(corTopo, corBase, t);
     for (let x = 0; x < buf.w; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.hypot(dx, dy);
+      const factor = Math.min(1, dist / maxR);
+      const bg = lerpColor(corCentro, corBorda, factor);
       blendPixel(buf, x, y, bg);
     }
   }
 }
 
-// Desenha a seta limpa (linha branca pura com terminações arredondadas)
-function desenharSetaLimpa(buf, escala = 0.65) {
+// Seta ROXA NEON Acesa
+function desenharSetaRoxaNeon(buf, escala = 0.68) {
   const size = buf.w;
   const artSize = size * escala;
   const ox = (size - artSize) / 2;
   const oy = (size - artSize) / 2;
 
-  // Pontos da seta (gráfico ascendente limpo)
+  // Traçado idêntico ao SVG do favicon
   const svgPoints = [
     [5, 25],
     [12, 15],
@@ -151,7 +156,7 @@ function desenharSetaLimpa(buf, escala = 0.65) {
     oy + (sy / 32) * artSize,
   ]);
 
-  const espessura = artSize * 0.13;
+  const espessura = artSize * 0.14;
   const raioStroke = espessura / 2;
 
   const boundMinX = Math.floor(ox - espessura * 2);
@@ -159,9 +164,26 @@ function desenharSetaLimpa(buf, escala = 0.65) {
   const boundMinY = Math.floor(oy - espessura * 2);
   const boundMaxY = Math.ceil(oy + artSize + espessura * 2);
 
-  // Seta em branco puro (#ffffff) com antialiasing perfeito
-  const corLinha = [255, 255, 255, 255];
+  // Cores da seta roxa neon acesa (vibrante como no print)
+  const corRoxoInicio = [147, 51, 234, 255]; // #9333ea
+  const corRoxoMeio = [168, 85, 247, 255];   // #a855f7
+  const corRoxoPonta = [216, 180, 254, 255];  // #d8b4fe
 
+  // 1. Halo / Brilho suave da seta roxa
+  const raioGlow = raioStroke * 2.2;
+  for (let y = boundMinY; y <= boundMaxY; y++) {
+    for (let x = boundMinX; x <= boundMaxX; x++) {
+      const d = distPontoPolilinha(x, y, pontos);
+      if (d <= raioGlow) {
+        const factor = Math.pow(1 - d / raioGlow, 2);
+        const tX = (x - ox) / artSize;
+        const cor = lerpColor(corRoxoInicio, corRoxoPonta, Math.min(1, Math.max(0, tX)));
+        blendPixel(buf, x, y, [cor[0], cor[1], cor[2], Math.round(95 * factor)]);
+      }
+    }
+  }
+
+  // 2. Traçado principal da seta roxa
   for (let y = boundMinY; y <= boundMaxY; y++) {
     for (let x = boundMinX; x <= boundMaxX; x++) {
       const d = distPontoPolilinha(x, y, pontos);
@@ -171,8 +193,13 @@ function desenharSetaLimpa(buf, escala = 0.65) {
           alpha = 1 - (d - raioStroke);
         }
 
-        const corFinal = [corLinha[0], corLinha[1], corLinha[2], Math.round(255 * alpha)];
-        blendPixel(buf, x, y, corFinal);
+        const tX = (x - ox) / artSize;
+        let cor = lerpColor(corRoxoInicio, corRoxoMeio, tX * 1.2);
+        if (tX > 0.5) {
+          cor = lerpColor(corRoxoMeio, corRoxoPonta, (tX - 0.5) / 0.5);
+        }
+
+        blendPixel(buf, x, y, [cor[0], cor[1], cor[2], Math.round(cor[3] * alpha)]);
       }
     }
   }
@@ -236,8 +263,8 @@ function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
   const superLado = ladoTarget * 2;
   const superBuf = criarBuffer(superLado, superLado);
 
-  desenharFundoRoxo(superBuf);
-  desenharSetaLimpa(superBuf, escalaArte);
+  desenharFundoRoxoEscuro(superBuf);
+  desenharSetaRoxaNeon(superBuf, escalaArte);
 
   if (raioSquircle > 0) {
     aplicarSquircle(superBuf, raioSquircle);
@@ -252,11 +279,11 @@ function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
 }
 
 const resultados = [
-  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.65, raioSquircle: 0.22 }),
-  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.65, raioSquircle: 0.22 }),
-  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.55, raioSquircle: 0 }),
-  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.62, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.68, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.68, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.56, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.64, raioSquircle: 0 }),
 ];
 
-console.log('Ícones PWA Seta Limpa gerados em public/:');
+console.log('Ícones PWA Seta Roxa Neon gerados em public/:');
 resultados.forEach(r => console.log('  ✓ ' + r));
