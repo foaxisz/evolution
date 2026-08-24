@@ -4,29 +4,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Gera os PNG do ícone do app sem depender de nenhuma biblioteca.
- *
- * A máquina não tem ImageMagick, sharp nem resvg — e o `convert` do PATH
- * no Windows é o utilitário que converte FAT em NTFS, não o do ImageMagick.
- * Como o desenho é pixel art, escrever o PNG à mão sai mais barato do que
- * arrastar uma dependência de imagem só para isto: PNG sem entrelaçamento
- * é assinatura + IHDR + IDAT (linhas cruas em zlib) + IEND.
- *
- * Rodar com: node scripts/gerar-icones.mjs
+ * Gerador de ícones PWA de alta definição com antialiasing supersampled.
+ * Gera ícones modernos, com gradientes suaves e iluminação neon para iOS/Android/Desktop.
  */
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// ── Paleta, a mesma do app ────────────────────────────────────────────
-const FUNDO = [18, 14, 34, 255];        // #120e22 — um degrau acima do bg
-const ROXO = [168, 85, 247, 255];       // --color-accent
-const ROXO_CLARO = [200, 140, 255, 255];// --color-accent-light
-const BASE = [63, 49, 99, 255];         // --color-border-light
-
-// ══════════════════════════════════════════════════════════════════════
-// Escrita de PNG
-// ══════════════════════════════════════════════════════════════════════
-
+// CRC32 para empacotamento PNG puro
 const TABELA_CRC = (() => {
   const t = new Int32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -56,14 +40,12 @@ function paraPNG(pixels, largura, altura) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(largura, 0);
   ihdr.writeUInt32BE(altura, 4);
-  ihdr[8] = 8;   // 8 bits por canal
-  ihdr[9] = 6;   // RGBA
-  ihdr[10] = 0;  // deflate
-  ihdr[11] = 0;  // filtro adaptativo
-  ihdr[12] = 0;  // sem entrelaçamento
+  ihdr[8] = 8;
+  ihdr[9] = 6; // RGBA
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
 
-  // Cada linha leva um byte de filtro na frente; 0 = sem filtro, que é o
-  // suficiente para arte chapada e mantém o código legível.
   const cru = Buffer.alloc(altura * (largura * 4 + 1));
   for (let y = 0; y < altura; y++) {
     const destino = y * (largura * 4 + 1);
@@ -79,110 +61,253 @@ function paraPNG(pixels, largura, altura) {
   ]);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// Desenho
-// ══════════════════════════════════════════════════════════════════════
-
-function tela(largura, altura) {
-  return { dados: Buffer.alloc(largura * altura * 4), largura, altura };
+// Interpolação de cores em HSL / RGB
+function lerpColor(c1, c2, t) {
+  const r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+  const g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+  const b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+  const a = Math.round(c1[3] + (c2[3] - c1[3]) * t);
+  return [r, g, b, a];
 }
 
-/** Composição normal (source-over) de um retângulo. */
-function retangulo(t, x0, y0, x1, y1, [r, g, b, a]) {
-  const ax0 = Math.max(0, Math.round(x0));
-  const ay0 = Math.max(0, Math.round(y0));
-  const ax1 = Math.min(t.largura, Math.round(x1));
-  const ay1 = Math.min(t.altura, Math.round(y1));
-  const alfa = a / 255;
+// Cria buffer de imagem em alta definição
+function criarBuffer(w, h) {
+  return { dados: Buffer.alloc(w * h * 4), w, h };
+}
 
-  for (let y = ay0; y < ay1; y++) {
-    for (let x = ax0; x < ax1; x++) {
-      const i = (y * t.largura + x) * 4;
-      const aDestino = t.dados[i + 3] / 255;
-      const aSaida = alfa + aDestino * (1 - alfa);
-      if (aSaida === 0) continue;
-      t.dados[i] = (r * alfa + t.dados[i] * aDestino * (1 - alfa)) / aSaida;
-      t.dados[i + 1] = (g * alfa + t.dados[i + 1] * aDestino * (1 - alfa)) / aSaida;
-      t.dados[i + 2] = (b * alfa + t.dados[i + 2] * aDestino * (1 - alfa)) / aSaida;
-      t.dados[i + 3] = aSaida * 255;
+// Blend alpha compositing
+function blendPixel(buf, x, y, [r, g, b, a]) {
+  if (x < 0 || y < 0 || x >= buf.w || y >= buf.h || a <= 0) return;
+  const i = (Math.floor(y) * buf.w + Math.floor(x)) * 4;
+  const alpha = a / 255;
+  const curA = buf.dados[i + 3] / 255;
+  const outA = alpha + curA * (1 - alpha);
+  if (outA <= 0) return;
+
+  buf.dados[i] = Math.round((r * alpha + buf.dados[i] * curA * (1 - alpha)) / outA);
+  buf.dados[i + 1] = Math.round((g * alpha + buf.dados[i + 1] * curA * (1 - alpha)) / outA);
+  buf.dados[i + 2] = Math.round((b * alpha + buf.dados[i + 2] * curA * (1 - alpha)) / outA);
+  buf.dados[i + 3] = Math.round(outA * 255);
+}
+
+// Desenha gradiente radial / fundo com brilho
+function preencherFundoGradiente(buf) {
+  const cx = buf.w / 2;
+  const cy = buf.h / 2;
+  const maxR = Math.sqrt(cx * cx + cy * cy);
+
+  const corCentro = [26, 16, 50, 255]; // #1a1032
+  const corBorda = [10, 7, 20, 255];  // #0a0714
+  const corBrilho = [139, 92, 246, 75]; // Neon purple aura
+
+  for (let y = 0; y < buf.h; y++) {
+    for (let x = 0; x < buf.w; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const factor = Math.min(1, dist / maxR);
+      
+      const bg = lerpColor(corCentro, corBorda, factor);
+      blendPixel(buf, x, y, bg);
+
+      // Adiciona aura brilhante no centro
+      const glowFactor = Math.max(0, 1 - dist / (buf.w * 0.45));
+      if (glowFactor > 0) {
+        const glow = [corBrilho[0], corBrilho[1], corBrilho[2], Math.round(corBrilho[3] * glowFactor * glowFactor)];
+        blendPixel(buf, x, y, glow);
+      }
     }
   }
 }
 
-/** Zera o alfa fora de um quadrado de cantos arredondados. */
-function arredondar(t, raio) {
-  const { largura: L, altura: A } = t;
-  for (let y = 0; y < A; y++) {
-    for (let x = 0; x < L; x++) {
-      const dx = x < raio ? raio - x - 0.5 : x >= L - raio ? x - (L - raio) + 0.5 : 0;
-      const dy = y < raio ? raio - y - 0.5 : y >= A - raio ? y - (A - raio) + 0.5 : 0;
-      if (dx * dx + dy * dy > raio * raio) t.dados[(y * L + x) * 4 + 3] = 0;
+// Retângulo com cantos arredondados e gradiente vertical
+function desenharRetanguloArredondado(buf, x0, y0, x1, y1, raio, corTopo, corBase) {
+  for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
+    const py = (y - y0) / (y1 - y0);
+    const cor = lerpColor(corTopo, corBase, py);
+
+    for (let x = Math.floor(x0); x <= Math.ceil(x1); x++) {
+      let dx = 0;
+      let dy = 0;
+
+      if (x < x0 + raio) dx = (x0 + raio) - x;
+      else if (x > x1 - raio) dx = x - (x1 - raio);
+
+      if (y < y0 + raio) dy = (y0 + raio) - y;
+      else if (y > y1 - raio) dy = y - (y1 - raio);
+
+      const d2 = dx * dx + dy * dy;
+      const r2 = raio * raio;
+
+      if (d2 <= r2) {
+        blendPixel(buf, x, y, cor);
+      } else if (d2 <= (raio + 1) * (raio + 1)) {
+        // Antialiasing nas bordas do canto
+        const alphaCov = 1 - (Math.sqrt(d2) - raio);
+        if (alphaCov > 0) {
+          const corAA = [cor[0], cor[1], cor[2], Math.round(cor[3] * alphaCov)];
+          blendPixel(buf, x, y, corAA);
+        }
+      }
     }
   }
 }
 
-/**
- * A marca: quatro barras subindo, com a ponta acesa.
- *
- * É a mesma leitura do bloco "Sua evolução" — acúmulo que só cresce — e do
- * favicon, que já era uma linha ascendente. Em barra e não em curva porque
- * curva de 3px some num ícone de 48px na gaveta do celular.
- *
- * `escala` é a fração do lado ocupada pela arte: no ícone mascarável ela
- * encolhe para caber na zona segura que o Android recorta.
- */
-function desenharMarca(t, escala) {
-  const lado = t.largura;
-  const arte = lado * escala;
-  const ox = (lado - arte) / 2;
-  const oy = (lado - arte) / 2;
+// Desenha a logo da Evolution em alta definição
+function desenharLogoEvolution(buf, escala = 1.0) {
+  const size = buf.w;
+  const artSize = size * escala;
+  const ox = (size - artSize) / 2;
+  const oy = (size - artSize) / 2;
 
-  const alturas = [0.34, 0.54, 0.74, 1.0];
-  const larguraBarra = arte * 0.165;
-  const vao = arte * 0.078;
-  const totalBarras = alturas.length * larguraBarra + (alturas.length - 1) * vao;
-  const inicioX = ox + (arte - totalBarras) / 2;
-  const baseY = oy + arte * 0.9;
-  const ponta = Math.max(2, arte * 0.055);
+  // 4 barras subindo com gradiente e topo iluminado
+  const barras = [
+    { h: 0.32, topo: [168, 85, 247, 255], base: [109, 40, 217, 255] },
+    { h: 0.52, topo: [192, 132, 252, 255], base: [124, 58, 237, 255] },
+    { h: 0.72, topo: [216, 180, 254, 255], base: [139, 92, 246, 255] },
+    { h: 0.96, topo: [244, 114, 182, 255], base: [168, 85, 247, 255] }, // Barra final rosa neon acesa
+  ];
 
-  // Linha de base, apagada — dá chão às barras.
-  retangulo(t, inicioX - vao, baseY, inicioX + totalBarras + vao, baseY + Math.max(2, arte * 0.028), BASE);
+  const barW = artSize * 0.16;
+  const gap = artSize * 0.07;
+  const totalW = barras.length * barW + (barras.length - 1) * gap;
+  const startX = ox + (artSize - totalW) / 2;
+  const baseY = oy + artSize * 0.88;
+  const cornerRadius = barW * 0.45;
 
-  alturas.forEach((h, i) => {
-    const x = inicioX + i * (larguraBarra + vao);
-    const topo = baseY - arte * 0.78 * h;
-
-    // Halo: a mesma barra, mais larga e translúcida. Substitui o desfoque,
-    // que exigiria convolução à mão sem ganho visível neste tamanho.
-    retangulo(t, x - arte * 0.02, topo - arte * 0.02, x + larguraBarra + arte * 0.02, baseY, [...ROXO.slice(0, 3), 46]);
-
-    retangulo(t, x, topo, x + larguraBarra, baseY, ROXO);
-    retangulo(t, x, topo, x + larguraBarra, topo + ponta, ROXO_CLARO);
+  // Sombra / brilho suave sob as barras
+  barras.forEach((b, i) => {
+    const x = startX + i * (barW + gap);
+    const topY = baseY - artSize * 0.76 * b.h;
+    const glowCor = [b.topo[0], b.topo[1], b.topo[2], 50];
+    desenharRetanguloArredondado(
+      buf,
+      x - barW * 0.15,
+      topY - barW * 0.15,
+      x + barW * 1.15,
+      baseY + barW * 0.1,
+      cornerRadius * 1.3,
+      glowCor,
+      glowCor
+    );
   });
+
+  // Barras principais
+  barras.forEach((b, i) => {
+    const x = startX + i * (barW + gap);
+    const topY = baseY - artSize * 0.76 * b.h;
+    desenharRetanguloArredondado(
+      buf,
+      x,
+      topY,
+      x + barW,
+      baseY,
+      cornerRadius,
+      b.topo,
+      b.base
+    );
+  });
+
+  // Brilho estrela / luz na ponta da 4ª barra
+  const peakX = startX + 3 * (barW + gap) + barW / 2;
+  const peakY = baseY - artSize * 0.76 * 0.96;
+  const starRadius = barW * 0.6;
+  
+  for (let y = Math.floor(peakY - starRadius); y <= Math.ceil(peakY + starRadius); y++) {
+    for (let x = Math.floor(peakX - starRadius); x <= Math.ceil(peakX + starRadius); x++) {
+      const dx = Math.abs(x - peakX);
+      const dy = Math.abs(y - peakY);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < starRadius) {
+        const intense = Math.pow(1 - dist / starRadius, 2);
+        blendPixel(buf, x, y, [255, 255, 255, Math.round(220 * intense)]);
+      }
+    }
+  }
 }
 
-function gerar({ arquivo, lado, escala, raio }) {
-  const t = tela(lado, lado);
-  retangulo(t, 0, 0, lado, lado, FUNDO);
-  desenharMarca(t, escala);
-  if (raio) arredondar(t, raio);
+// Corta cantos em formato de ícone de app (squircle)
+function aplicarSquircle(buf, raioFracao = 0.22) {
+  const r = buf.w * raioFracao;
+  const w = buf.w;
+  const h = buf.h;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let dx = 0;
+      let dy = 0;
+
+      if (x < r) dx = r - x - 0.5;
+      else if (x > w - r) dx = x - (w - r) + 0.5;
+
+      if (y < r) dy = r - y - 0.5;
+      else if (y > h - r) dy = y - (h - r) + 0.5;
+
+      const distSq = dx * dx + dy * dy;
+      if (distSq > r * r) {
+        const i = (y * w + x) * 4;
+        buf.dados[i + 3] = 0;
+      }
+    }
+  }
+}
+
+// Downsample com box-filtering 2x2 para Antialiasing perfeito
+function downsample2x(hiresBuf) {
+  const targetW = hiresBuf.w / 2;
+  const targetH = hiresBuf.h / 2;
+  const outBuf = criarBuffer(targetW, targetH);
+
+  for (let y = 0; y < targetH; y++) {
+    for (let x = 0; x < targetW; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 2; dx++) {
+          const hiX = x * 2 + dx;
+          const hiY = y * 2 + dy;
+          const i = (hiY * hiresBuf.w + hiX) * 4;
+          r += hiresBuf.dados[i];
+          g += hiresBuf.dados[i + 1];
+          b += hiresBuf.dados[i + 2];
+          a += hiresBuf.dados[i + 3];
+        }
+      }
+      const outI = (y * targetW + x) * 4;
+      outBuf.dados[outI] = Math.round(r / 4);
+      outBuf.dados[outI + 1] = Math.round(g / 4);
+      outBuf.dados[outI + 2] = Math.round(b / 4);
+      outBuf.dados[outI + 3] = Math.round(a / 4);
+    }
+  }
+  return outBuf;
+}
+
+function gerarIcone({ arquivo, ladoTarget, escalaArte, raioSquircle }) {
+  // Renderiza em 2x de resolução para supersampling perfeito
+  const superLado = ladoTarget * 2;
+  const superBuf = criarBuffer(superLado, superLado);
+
+  preencherFundoGradiente(superBuf);
+  desenharLogoEvolution(superBuf, escalaArte);
+
+  if (raioSquircle > 0) {
+    aplicarSquircle(superBuf, raioSquircle);
+  }
+
+  const finalBuf = downsample2x(superBuf);
 
   const destino = join(RAIZ, 'public', arquivo);
   mkdirSync(dirname(destino), { recursive: true });
-  writeFileSync(destino, paraPNG(t.dados, lado, lado));
-  return `${arquivo} (${lado}x${lado})`;
+  writeFileSync(destino, paraPNG(finalBuf.dados, ladoTarget, ladoTarget));
+  return `${arquivo} (${ladoTarget}x${ladoTarget})`;
 }
 
-const feitos = [
-  // `any`: cantos arredondados, arte folgada.
-  gerar({ arquivo: 'icone-192.png', lado: 192, escala: 0.72, raio: 42 }),
-  gerar({ arquivo: 'icone-512.png', lado: 512, escala: 0.72, raio: 112 }),
-  // `maskable`: sangra até a borda e a arte cabe na zona segura de 80%,
-  // porque o Android recorta o ícone no formato do sistema.
-  gerar({ arquivo: 'icone-maskable-512.png', lado: 512, escala: 0.52, raio: 0 }),
-  // iOS arredonda sozinho — mandar já arredondado deixaria borda dupla.
-  gerar({ arquivo: 'apple-touch-icon.png', lado: 180, escala: 0.66, raio: 0 }),
+const resultados = [
+  gerarIcone({ arquivo: 'icone-192.png', ladoTarget: 192, escalaArte: 0.65, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-512.png', ladoTarget: 512, escalaArte: 0.65, raioSquircle: 0.22 }),
+  gerarIcone({ arquivo: 'icone-maskable-512.png', ladoTarget: 512, escalaArte: 0.52, raioSquircle: 0 }),
+  gerarIcone({ arquivo: 'apple-touch-icon.png', ladoTarget: 180, escalaArte: 0.62, raioSquircle: 0 }),
 ];
 
-console.log('Ícones gerados em public/:');
-feitos.forEach(f => console.log('  ' + f));
+console.log('Ícones PWA HD gerados em public/:');
+resultados.forEach(r => console.log('  ✓ ' + r));
