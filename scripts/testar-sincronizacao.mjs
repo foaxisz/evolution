@@ -1,5 +1,5 @@
 import {
-  desmontar, diferenca, aplicar, paraEnviar, faltandoNoServidor,
+  desmontar, diferenca, aplicar, aplicaveis, paraEnviar, faltandoNoServidor,
   canonico, EXCLUIDO_CANONICO, DOC_INTEIRO,
 } from '../src/lib/registros.ts';
 
@@ -546,6 +546,62 @@ console.log('\n── Cenários reais entre PC e celular ──');
   for (let i = 0; i < 10; i++) { ciclo(pc, srv); ciclo(cel, srv); }
   verificar('10 ciclos ociosos não escrevem nada no servidor', srv.tique(), antes);
   verificar('e os dois seguem iguais', ids(cel), ids(pc));
+}
+
+
+// ══════════════════════════════════════════════════════════════════════
+// Gravação DURANTE o ciclo (o bug de contar água)
+// ══════════════════════════════════════════════════════════════════════
+
+console.log('\nGravação feita durante a janela de rede do ciclo:');
+{
+  const linha = (id, valor, excluido = false) => ({
+    colecao: 'evo_habit_logs', registro_id: id,
+    dados: excluido ? null : { id, count: valor },
+    excluido, atualizado_em: '2026-08-25T10:00:00.000Z',
+  });
+
+  // O cenário exato: enviei count=1, cliquei para 2 antes da resposta, e o
+  // servidor devolveu o 1 que eu mesmo mandei.
+  const local = [{ id: 'log1', count: 2 }];
+  const doServidor = [linha('log1', 1)];
+  const naFila = { evo_habit_logs: ['log1'] };
+
+  verificar('a resposta velha do servidor é descartada',
+    aplicaveis(doServidor, naFila), []);
+  verificar('e o valor local sobrevive',
+    aplicar(local, aplicaveis(doServidor, naFila)), local);
+
+  // Sem nada na fila, a linha aplica normalmente — senão a sincronização
+  // simplesmente pararia de funcionar.
+  verificar('sem pendência, aplica',
+    aplicaveis(doServidor, {}).length, 1);
+  verificar('e o valor do servidor entra',
+    aplicar(local, aplicaveis(doServidor, {})), [{ id: 'log1', count: 1 }]);
+
+  // Id diferente na fila não protege o que não é dele.
+  verificar('a proteção é por id, não por coleção',
+    aplicaveis(doServidor, { evo_habit_logs: ['outro'] }).length, 1);
+
+  // Coleção diferente também não.
+  verificar('e por coleção também',
+    aplicaveis(doServidor, { evo_habits: ['log1'] }).length, 1);
+
+  // Exclusão passa mesmo protegida: ressuscitar registro apagado é o erro
+  // pior, e foi o bug que a lápide veio consertar.
+  verificar('exclusão atravessa a proteção',
+    aplicaveis([linha('log1', null, true)], naFila).length, 1);
+  verificar('e apaga de verdade',
+    aplicar(local, aplicaveis([linha('log1', null, true)], naFila)), []);
+
+  // Fila vazia gravada como array vazio não deve proteger nada.
+  verificar('array vazio na fila não protege',
+    aplicaveis(doServidor, { evo_habit_logs: [] }).length, 1);
+
+  // Vários cliques seguidos: dois ids protegidos, um terceiro livre.
+  const tres = [linha('a', 1), linha('b', 1), linha('c', 1)];
+  verificar('protege só os que estão na fila',
+    aplicaveis(tres, { evo_habit_logs: ['a', 'c'] }).map(l => l.registro_id), ['b']);
 }
 
 console.log(falhas === 0 ? '\nTodos passaram.' : `\n${falhas} falha(s).`);

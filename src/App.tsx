@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Page } from './types';
 import { ProvedorDeAutenticacao, useAutenticacao } from './lib/auth';
@@ -75,8 +75,18 @@ function AppInterno() {
   );
 }
 
-const ESPERA_PARA_AVISAR = 900;
-
+/**
+ * Só aparece quando FALHA.
+ *
+ * Havia também um "Sincronizando…" enquanto o ciclo corria. Saiu: o ciclo
+ * roda a cada gravação, então contar tarefa ou somar água piscava o aviso a
+ * cada clique — e sincronização que funcionou não é notícia. O lugar de
+ * saber que deu certo é o dado estar lá.
+ *
+ * A falha continua na tela, e com o motivo escrito. Não é enfeite: foi a
+ * ausência dessa frase que deixou um 404 de tabela inexistente passar por
+ * três reescritas da lógica de sincronização.
+ */
 function SeloDeSincronizacao({
   estado,
   motivo,
@@ -86,18 +96,9 @@ function SeloDeSincronizacao({
   motivo: string | null;
   aoTentarSubir: () => void;
 }) {
-  const [demorou, setDemorou] = useState(false);
+  if (estado !== 'erro') return null;
 
-  useEffect(() => {
-    if (estado !== 'enviando') { setDemorou(false); return; }
-    const t = setTimeout(() => setDemorou(true), ESPERA_PARA_AVISAR);
-    return () => clearTimeout(t);
-  }, [estado]);
-
-  if (estado === 'ocioso' || estado === 'desligada') return null;
-  if (estado === 'enviando' && !demorou) return null;
-
-  const falhou = estado === 'erro';
+  const falhou = true;
   return (
     <button
       type="button"
@@ -113,17 +114,8 @@ function SeloDeSincronizacao({
         color: falhou ? 'var(--color-danger)' : 'var(--color-text-muted)',
       }}
     >
-      {!falhou ? (
-        'Sincronizando…'
-      ) : (
-        <>
-          {/* O motivo na tela, e não só no console: foi a ausência dele que
-              deixou um 404 de tabela inexistente passar por três reescritas
-              da lógica. */}
-          <span className="block">{motivo ?? 'Sem sincronizar'}</span>
-          <span className="block opacity-70">Toque para tentar de novo</span>
-        </>
-      )}
+      <span className="block">{motivo ?? 'Sem sincronizar'}</span>
+      <span className="block opacity-70">Toque para tentar de novo</span>
     </button>
   );
 }

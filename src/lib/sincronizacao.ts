@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import {
-  desmontar, diferenca, aplicar, paraEnviar, faltandoNoServidor, canonico,
-  DOC_INTEIRO, EXCLUIDO_CANONICO, type LinhaRemota,
+  desmontar, diferenca, aplicar, aplicaveis, paraEnviar, faltandoNoServidor,
+  canonico, DOC_INTEIRO, EXCLUIDO_CANONICO, type LinhaRemota,
 } from './registros';
 
 /**
@@ -322,8 +322,30 @@ export async function puxar(): Promise<string[]> {
  * nenhuma perda.
  */
 function aplicarLinhas(linhas: LinhaRemota[]): string[] {
+  /*
+   * O que está na fila AGORA é mais novo que o que o servidor devolveu.
+   *
+   * `empurrar` limpa da fila só os ids que ele mesmo subiu, então o que
+   * sobra aqui foi gravado DEPOIS do envio — durante a ida e volta da rede.
+   * Aplicar a resposta em cima disso apaga a gravação mais recente.
+   *
+   * Era o bug de contar água: cada clique agenda um ciclo, e o clique
+   * seguinte caía dentro da janela de rede do ciclo anterior. Enviava 1,
+   * clicava para 2, a puxada respondia 1 e gravava 1 por cima — dois
+   * cliques terminavam em um, e às vezes parecia que o clique REMOVEU.
+   *
+   * O id fica na fila: o ciclo seguinte manda o valor local adiante, e a
+   * convergência acontece um ciclo depois. Isto NÃO é o "escudo" antigo, que
+   * tirava o id da fila e com isso perdia a alteração de vez.
+   *
+   * A exclusão passa mesmo assim, de propósito. Sem carimbo não há como
+   * ordenar a minha edição contra a exclusão do outro aparelho, e entre
+   * ressuscitar um registro apagado e perder uma edição, ressuscitar é o
+   * erro pior — foi exatamente o bug que a exclusão com lápide veio
+   * consertar.
+   */
   const porColecao = new Map<string, LinhaRemota[]>();
-  for (const linha of linhas) {
+  for (const linha of aplicaveis(linhas, pendentes())) {
     if (!ehSincronizada(linha.colecao)) continue;
     const lista = porColecao.get(linha.colecao);
     if (lista) lista.push(linha);

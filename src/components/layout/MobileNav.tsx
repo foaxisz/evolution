@@ -2,11 +2,9 @@ import { useState } from 'react';
 import {
   CalendarDays, BarChart3, Target, Trophy,
   BookOpen, Cookie, ShoppingBag, CheckSquare,
-  MoreHorizontal, X, LogOut, Timer, RefreshCw,
-} from 'lucide-react';
+  MoreHorizontal, X, LogOut, Timer, } from 'lucide-react';
 import type { Page } from '../../types';
 import { useAutenticacao } from '../../lib/auth';
-import { recomecar } from '../../lib/sincronizacao';
 import BotaoInstalarPWA from '../ui/BotaoInstalarPWA';
 
 interface NavItem {
@@ -105,13 +103,6 @@ export default function MobileNav({ activePage, onNavigate }: MobileNavProps) {
               <div className="space-y-1 pt-1">
                 <p className="px-1 text-[11px] text-text-muted truncate">{email}</p>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setMaisAberto(false); recomecar(); window.location.reload(); }}
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-accent-light transition-colors hover:bg-accent/10"
-                  >
-                    <RefreshCw size={13} />
-                    Resincronizar
-                  </button>
                   <button
                     onClick={() => { setMaisAberto(false); sair(); }}
                     className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-danger ml-auto"

@@ -116,6 +116,42 @@ export function diferenca(antes: unknown, depois: unknown): string[] {
  * Devolve o MESMO valor quando nada muda, para quem chama distinguir
  * "apliquei" de "não havia o que aplicar" sem comparar JSON.
  */
+/**
+ * Filtra as linhas que a puxada pode aplicar por cima do que está local.
+ *
+ * Regra única: se o id ainda está na fila de envio, a versão local é mais
+ * nova que a resposta do servidor. `empurrar` só tira da fila os ids que ele
+ * mesmo subiu, então o que sobra foi gravado DEPOIS do envio — durante a ida
+ * e volta da rede. Aplicar a resposta ali apaga a gravação mais recente.
+ *
+ * Era o bug de contar água: cada clique agenda um ciclo, o clique seguinte
+ * caía dentro da janela de rede do anterior, e a puxada devolvia o valor
+ * velho e o gravava por cima. Dois cliques terminavam em um.
+ *
+ * O id FICA na fila — o ciclo seguinte manda o valor local e a convergência
+ * acontece um ciclo depois. É o que separa isto do "escudo" antigo, que
+ * tirava o id da fila e perdia a alteração de vez.
+ *
+ * Exclusão passa mesmo protegida. Sem carimbo não há como ordenar minha
+ * edição contra a exclusão do outro aparelho, e entre ressuscitar um
+ * registro apagado e perder uma edição, ressuscitar é o erro pior.
+ */
+export function aplicaveis(
+  linhas: LinhaRemota[],
+  pendentes: Record<string, string[] | undefined>,
+): LinhaRemota[] {
+  const protegidos = new Map<string, Set<string>>();
+  for (const colecao of Object.keys(pendentes)) {
+    const ids = pendentes[colecao];
+    if (ids && ids.length > 0) protegidos.set(colecao, new Set(ids));
+  }
+  if (protegidos.size === 0) return linhas;
+
+  return linhas.filter(
+    l => l.excluido || !protegidos.get(l.colecao)?.has(l.registro_id)
+  );
+}
+
 export function aplicar(documento: unknown, linhas: LinhaRemota[]): unknown {
   if (linhas.length === 0) return documento;
 
