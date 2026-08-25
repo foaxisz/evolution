@@ -2,74 +2,36 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { observarGravacoes } from '../store';
 import { supabase } from './supabase';
 import {
-  anotarGravacao, puxar, empurrar, primeiraCarga, jaSincronizou, assinarMudancas,
+  anotarGravacao, empurrar, executarCiclo, assinarMudancas, diagnosticar,
   type EstadoDaSincronizacao,
 } from './sincronizacao';
 
 /**
  * Espera antes de enviar.
- *
- * Curta, porque agora sair não custa quase nada: sobe só o registro que
- * mudou. Ela existe para juntar a rajada de gravações de uma mesma ação —
- * marcar um hábito grava a lista e o contador em sequência — e não para
- * poupar banda.
  */
 const ESPERA_MS = 250;
 
 /**
  * De quanto em quanto tempo perguntar ao servidor, com a tela à vista.
- *
- * A pergunta é "o que mudou desde o carimbo X?", que com o índice do banco
- * custa quase nada e quase sempre volta vazia. É a rede de segurança de
- * baixo do tempo real: se o Realtime não estiver ligado na tabela, ou o
- * websocket cair, a sincronização continua acontecendo sozinha.
  */
 const VIGIA_MS = 8_000;
 
 /**
  * Liga a sincronização ao ciclo de vida do app.
- *
- * Gatilhos, e cada um cobre um buraco do outro:
- *  - gravação local → anota o registro e agenda o envio
- *  - aviso do servidor (Realtime) → puxa na hora que o outro grava
- *  - vigia de 8s com a tela à vista → cobre Realtime desligado ou caído
- *  - entrada, volta ao foco, volta da rede → puxa
- *  - antes de fechar → última tentativa de esvaziar a fila
- *
- * Falha de rede não trava nada: o app é local primeiro, e o que não subiu
- * fica anotado no `localStorage` — sobrevive até a fechar o app.
  */
 export function useSincronizacao(usuarioId: string | null) {
   const [estado, setEstado] = useState<EstadoDaSincronizacao>(
     supabase ? 'ocioso' : 'desligada'
   );
   const [versao, setVersao] = useState(0);
+  const [motivo, setMotivo] = useState<string | null>(null);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rodando = useRef(false);
   const denovo = useRef(false);
 
   /**
-   * Um ciclo inteiro: ENVIAR e depois PUXAR.
-   *
-   * Essa ordem é o conserto do bug de exclusão que voltava. Puxando
-   * primeiro, o que a pessoa acabou de fazer ainda não estava no servidor,
-   * e era preciso um escudo para a resposta não desfazer isso na tela. O
-   * escudo ignorava as linhas dos registros na fila — e um registro preso
-   * na fila ficava surdo: a exclusão do outro aparelho era descartada, o
-   * registro seguia vivo aqui, e o envio seguinte o ressuscitava.
-   *
-   * Enviando primeiro, o escudo é desnecessário: quando a resposta chega, o
-   * nosso já está lá e volta idêntico. O que o outro fez depois tem carimbo
-   * maior e vence — inclusive exclusão.
-   *
-   * A exceção é a PRIMEIRA carga deste aparelho, que puxa tudo antes de
-   * decidir o que subir. Sem isso, um aparelho que ficou dias fechado
-   * republicaria como vivo tudo o que foi excluído nesse meio-tempo.
-   *
-   * A trava é necessária porque há quatro gatilhos e eles se sobrepõem; o
-   * `denovo` garante que um aviso chegado no meio do ciclo não seja
-   * perdido, só adiado até o fim dele.
+   * Um ciclo unificado (v3): ENVIAR pendentes locais -> PUXAR remotas -> RECONCILIAR.
    */
   const ciclo = useCallback(async () => {
     if (!usuarioId) return;
@@ -78,29 +40,21 @@ export function useSincronizacao(usuarioId: string | null) {
     rodando.current = true;
     try {
       setEstado('enviando');
+      const mudadas = await executarCiclo();
 
-      let mudadas: string[];
-      if (!jaSincronizou()) {
-        // Aparelho novo (ou depois de `recomecar`): baixa tudo, aplica, e
-        // só então marca o que é local e não está lá.
-        mudadas = await primeiraCarga();
-        await empurrar();
-      } else {
-        await empurrar();
-        mudadas = await puxar();
-      }
-
-      // Só redesenha se algo de fato chegou — bump à toa remonta a árvore
-      // inteira e faz a tela piscar.
       if (mudadas.length > 0) setVersao(v => v + 1);
+      setMotivo(null);
       setEstado('ocioso');
-    } catch {
+    } catch (e) {
+      console.error('[evo sync]', e);
+      setMotivo(diagnosticar(e));
       setEstado('erro');
     } finally {
       rodando.current = false;
       if (denovo.current) { denovo.current = false; ciclo(); }
     }
   }, [usuarioId]);
+
 
   // Gravações locais viram registros pendentes.
   useEffect(() => {
@@ -157,5 +111,5 @@ export function useSincronizacao(usuarioId: string | null) {
 
   const sincronizarAgora = useCallback(() => ciclo(), [ciclo]);
 
-  return { estado, versao, sincronizarAgora };
+  return { estado, versao, motivo, sincronizarAgora };
 }

@@ -51,10 +51,7 @@ function AppInterno() {
   const [activePage, setActivePage] = useState<Page>('today');
   const { sessao } = useAutenticacao();
 
-  // `versao` sobe quando a sincronização traz dado de outro aparelho. Como
-  // as páginas leem o store na montagem, remontá-las pela `key` é o jeito
-  // mais simples de refletir o que chegou sem espalhar estado por todas.
-  const { estado, versao } = useSincronizacao(sessao?.user.id ?? null);
+  const { estado, versao, motivo, sincronizarAgora } = useSincronizacao(sessao?.user.id ?? null);
 
   const renderPage = () => {
     switch (activePage) {
@@ -73,26 +70,22 @@ function AppInterno() {
   return (
     <Layout activePage={activePage} onNavigate={setActivePage}>
       <div key={versao} className="contents">{renderPage()}</div>
-      <SeloDeSincronizacao estado={estado} />
+      <SeloDeSincronizacao estado={estado} motivo={motivo} aoTentarSubir={sincronizarAgora} />
     </Layout>
   );
 }
 
-/** Quanto tempo a sincronização precisa demorar para valer um aviso. */
 const ESPERA_PARA_AVISAR = 900;
 
-/**
- * Selo de sincronização.
- *
- * Só aparece quando há o que dizer, e o "enviando" ainda espera quase um
- * segundo antes de surgir: a carga normal termina em poucas centenas de
- * milissegundos, e mostrar "sincronizando" em toda atualização treinava a
- * pessoa a ignorar o aviso — aí ele não serve nem quando importa.
- *
- * Erro aparece na hora. Esse não é rotina, e esperar para avisar que algo
- * falhou é o contrário do que um aviso existe para fazer.
- */
-function SeloDeSincronizacao({ estado }: { estado: EstadoDaSincronizacao }) {
+function SeloDeSincronizacao({
+  estado,
+  motivo,
+  aoTentarSubir,
+}: {
+  estado: EstadoDaSincronizacao;
+  motivo: string | null;
+  aoTentarSubir: () => void;
+}) {
   const [demorou, setDemorou] = useState(false);
 
   useEffect(() => {
@@ -106,17 +99,32 @@ function SeloDeSincronizacao({ estado }: { estado: EstadoDaSincronizacao }) {
 
   const falhou = estado === 'erro';
   return (
-    <div
+    <button
+      type="button"
+      onClick={aoTentarSubir}
       role="status"
-      className="pointer-events-none fixed bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-full border px-3 py-1.5 text-[11px] md:bottom-4"
+      title={motivo ?? undefined}
+      className={`fixed bottom-20 left-1/2 z-30 max-w-[92vw] -translate-x-1/2 rounded-2xl border px-3.5 py-1.5 text-[11px] font-medium transition-transform active:scale-95 md:bottom-4 md:max-w-md ${
+        falhou ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'
+      }`}
       style={{
         borderColor: falhou ? 'var(--color-danger)' : 'var(--color-border)',
         backgroundColor: 'var(--color-bg-card)',
         color: falhou ? 'var(--color-danger)' : 'var(--color-text-muted)',
       }}
     >
-      {falhou ? 'Sem sincronizar — tentando de novo' : 'Sincronizando…'}
-    </div>
+      {!falhou ? (
+        'Sincronizando…'
+      ) : (
+        <>
+          {/* O motivo na tela, e não só no console: foi a ausência dele que
+              deixou um 404 de tabela inexistente passar por três reescritas
+              da lógica. */}
+          <span className="block">{motivo ?? 'Sem sincronizar'}</span>
+          <span className="block opacity-70">Toque para tentar de novo</span>
+        </>
+      )}
+    </button>
   );
 }
 

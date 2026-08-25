@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, exigirLogin, traduzirErroDeAuth } from './supabase';
+import { recomecar } from './sincronizacao';
 
 interface Autenticacao {
   /** `null` enquanto ainda não sabemos — evita piscar a tela de login. */
@@ -61,6 +62,7 @@ export function ProvedorDeAutenticacao({ children }: { children: React.ReactNode
   }, []);
 
   const sair = useCallback(async () => {
+    recomecar();
     await supabase?.auth.signOut();
   }, []);
 

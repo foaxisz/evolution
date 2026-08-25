@@ -72,66 +72,68 @@ preencha e-mail e senha. Eu não crio conta nem preencho senha por você.
 
 ---
 
-## Estado atual
+## Passo 5 — Criar a tabela ← **você, e é o que falta**
 
-Pronto:
+> **A tabela `registros` NUNCA foi criada no banco.** Este documento afirmou
+> por engano que estava ("✔ feito — tabela criada"), e essa frase custou
+> três reescritas da lógica do cliente. Enquanto ela existia aqui, ninguém
+> desconfiou do banco.
+>
+> Verificado em 2026-08-25, com a chave publishable:
+>
+> ```
+> GET /rest/v1/registros  →  404
+> {"code":"PGRST205","message":"Could not find the table 'public.registros'"}
+> ```
+>
+> O banco tem só `documentos`, do modelo antigo. Toda chamada de
+> sincronização respondia 404 — era esse o "erro de sincronização" que
+> aparecia no celular e no computador ao mesmo tempo. Não era conflito, nem
+> RLS, nem race condition.
 
-- Cliente do Supabase, que se desliga sozinho se faltar configuração
-- Sessão que sobrevive a fechar o app, com renovação automática de token
-- Tela de entrar e criar conta, com os erros traduzidos
-- Botão de sair na barra lateral e na gaveta do celular
-- **Schema com Row Level Security** — `supabase/schema.sql`
-- **Camada de sincronização** — `src/lib/sincronizacao.ts`, com fila,
-  espera de 1,2s e nova tentativa quando a aba volta ao foco
-- **Mesclagem por registro** — `src/lib/mesclar.ts`, com testes em
-  `npm run testar`
-- **Indicador de estado** — aparece só quando está enviando ou falhou
-- **PWA** — instalável, com ícone próprio e cache offline
+**Como criar** (não dá para eu fazer: alterar schema exige credencial que
+muda o banco, e a secret key não deve ser colada no projeto nem no chat):
 
-A tabela `documentos` já existe no projeto, com RLS ativa — conferido pela
-API (anônimo não lê nada).
+1. Abra o painel: https://supabase.com/dashboard → seu projeto
+2. **SQL Editor → New query**
+3. Cole o conteúdo INTEIRO de
+   [`supabase/migrations/20260826000000_registros_v4.sql`](supabase/migrations/20260826000000_registros_v4.sql)
+4. **Run**
 
-### O bug que fazia nada sincronizar (corrigido)
+O arquivo é idempotente (pode rodar de novo) e termina com três consultas
+de conferência: as colunas da tabela, as 4 políticas de RLS, e o tempo real
+ligado. Se as três responderem, está pronto.
 
-A carga inicial **enviava antes de puxar**. Como cada envio substitui o
-documento inteiro no servidor, o aparelho que abrisse por último apagava
-lá o que o outro tinha gravado — antes de sequer ler. A mescla por
-registro estava certa, mas nunca via o dado do outro lado.
+Depois disso, abra o app nos dois aparelhos. Se o selo de erro insistir, ele
+agora **diz o motivo** em vez de só "Sem sincronizar".
 
-A ordem agora é **puxar → mesclar → enviar**, e o envio fica travado até a
-primeira puxada dar certo (offline, a fila só acumula; nada se perde).
+## Estado atual (v4)
 
-### Uma decisão de projeto que mudou
+Pronto no cliente:
 
-O plano original era "uma tabela por tipo, espelhando `src/types/index.ts`".
-Ficou **uma tabela só**, `documentos`, com `(usuario_id, chave) → jsonb`.
+- Cliente do Supabase com verificação de sessão e renovação automática de token
+- **Unidade é o registro** — `public.registros (usuario_id, colecao, registro_id, dados, excluido, atualizado_em)`
+- **Ciclo unificado** — `src/lib/sincronizacao.ts`: conferir dono → enviar → puxar → reconciliar
+- **Fila local persistente** em `localStorage` — sobrevive a fechar o app e a falta de rede
+- **Erro que se identifica** — `diagnosticar()` traduz a falha para uma frase que diz o que fazer, na tela e não só no console
+- **45 testes** — `npm run testar`, com simulador de dois aparelhos
 
-O motivo: o app guarda cada tipo como documento inteiro e faz todo o
-filtro no navegador — não existe consulta por coluna, ordenação no
-servidor nem junção. Dezoito tabelas dariam dezoito políticas de RLS e uma
-migração a cada campo novo, sem entregar nada que o app use.
+### As sete invariantes
 
-O preço é não dar para consultar por dentro do JSON com eficiência. Se um
-dia precisar, o caminho é promover **aquele** tipo para tabela própria —
-não reescrever tudo.
+1. **Unidade atômica.** Cada hábito/log é uma linha. Editar um não encosta nos outros, então não há janela entre ler e escrever em que o trabalho do outro aparelho seja apagado.
+2. **Exclusão é estado**, não ausência: grava `excluido: true`. Ausência de linha é indistinguível de "o outro ainda não me contou que criou" — foi isso que ressuscitava registro apagado.
+3. **Enviar antes de puxar.** Quando a resposta chega, o que a pessoa acabou de fazer já está no servidor e volta idêntico. É o que dispensa qualquer escudo — e o escudo, quando existia, era o que bloqueava a exclusão vinda do outro aparelho.
+4. **Ordenação total na leitura** (`atualizado_em, colecao, registro_id`). `range()` pagina por posição, então a ordem precisa ser total; ordenando só por carimbo, a página 2 repetia uma linha da página 1 e pulava outra. Acima de 500 registros era perda garantida.
+5. **Margem no cursor** (5s para trás). Carimbo e ordem de commit não são a mesma coisa: uma transação que começou antes pode confirmar depois. Sem a margem, essa linha nunca mais era lida.
+6. **Carimbo do banco, com `clock_timestamp()`** e não `now()`. `now()` é o horário da transação, igual para todas as linhas do lote — o que quebrava a ordenação da paginação.
+7. **Dado tem dono.** `evo_sync_usuario` guarda de quem é o que está no aparelho. Sem isso, entrar com outra conta no mesmo aparelho subia o histórico da conta anterior para a conta nova.
 
-A resolução de conflito continua **por registro**, como estava planejado:
-união dos dois lados pelo `id`, e só no mesmo `id` há disputa.
+### Aplicar antes de avançar o carimbo
 
-## Passo 5 — Autorizar a CLI ✔ feito (tabela criada)
-
-Criar tabela exige credencial que altera schema, e a chave publishable
-não serve (a API responde `Secret API key required`). A secret key não
-deve ser colada no projeto nem no chat.
-
-O caminho sem expor segredo é a CLI, que autentica pelo navegador:
-
-```bash
-npx supabase login
-```
-
-Você clica em autorizar e o token fica **na sua máquina**. Depois disso a
-migração em `supabase/migrations/` pode ser aplicada sem mais nada seu.
+`aplicarLinhas` grava, e só então o carimbo anda. Se a gravação local falhar
+— disco cheio dá `QuotaExceededError` — a exceção sobe com o carimbo
+intacto e o mesmo intervalo é pedido de novo. Na ordem inversa, o intervalo
+seria considerado lido e o dado sumiria sem erro nenhum.
 
 ## Deploy na Vercel
 

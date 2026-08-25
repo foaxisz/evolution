@@ -1,5 +1,5 @@
 import {
-  canonico, desmontar, diferenca, aplicar, paraEnviar, faltandoNoServidor, DOC_INTEIRO,
+  canonico, desmontar, diferenca, aplicar, paraEnviar, faltandoNoServidor, DOC_INTEIRO, EXCLUIDO_CANONICO,
 } from '../src/lib/registros.ts';
 
 /**
@@ -67,9 +67,11 @@ ok('exclusão remota é aplicada MESMO com o id pendente aqui',
   aplicar([{ id: 'a' }, { id: 'b' }], [linha('a', null, true)]), [{ id: 'b' }]);
 
 // Depois de aplicada a exclusão, 'a' não pode ser candidato a subir.
-const remotos = new Map([['evo_habits a', ' excluido'], ['evo_habits b', canonico({ id: 'b' })]]);
+const remotos = new Map([['evo_habits a', EXCLUIDO_CANONICO], ['evo_habits b', canonico({ id: 'b' })]]);
 ok('registro excluído no servidor NÃO é reenviado como vivo',
   faltandoNoServidor([{ id: 'b' }], remotos, 'evo_habits'), []);
+ok('registro excluído no servidor NÃO é reenviado como vivo mesmo se sobrou no documento local',
+  faltandoNoServidor([{ id: 'a' }, { id: 'b' }], remotos, 'evo_habits'), []);
 ok('registro só-local ainda sobe',
   faltandoNoServidor([{ id: 'b' }, { id: 'c' }], remotos, 'evo_habits'), ['c']);
 ok('registro igual ao servidor não sobe de novo (era o vazamento do jsonb)',

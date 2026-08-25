@@ -169,6 +169,8 @@ export function paraEnviar(
   });
 }
 
+export const EXCLUIDO_CANONICO = '__EXCLUIDO__';
+
 /**
  * Registros locais que o servidor não tem, ou tem diferentes.
  *
@@ -183,6 +185,11 @@ export function faltandoNoServidor(
   colecao: string,
 ): string[] {
   return desmontar(documento)
-    .filter(r => remotos.get(`${colecao} ${r.id}`) !== canonico(r.dados))
+    .filter(r => {
+      const val = remotos.get(`${colecao} ${r.id}`);
+      if (val === EXCLUIDO_CANONICO) return false;
+      return val !== canonico(r.dados);
+    })
     .map(r => r.id);
 }
+

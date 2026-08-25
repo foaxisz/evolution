@@ -28,9 +28,7 @@ export const supabaseConfigurado = Boolean(url && chave);
  * Para conferir a tela sem publicar, ponha no `.env.local`:
  *   VITE_EXIGIR_LOGIN=true
  */
-export const exigirLogin =
-  supabaseConfigurado &&
-  (import.meta.env.PROD || import.meta.env.VITE_EXIGIR_LOGIN === 'true');
+export const exigirLogin = supabaseConfigurado;
 
 export const supabase: SupabaseClient | null = supabaseConfigurado
   ? createClient(url!, chave!, {

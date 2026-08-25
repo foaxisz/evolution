@@ -1,79 +1,79 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- Evolution — schema de sincronização
+-- Evolution — sincronização por registro (v3)
 --
 -- Rode este arquivo INTEIRO no SQL Editor do painel do Supabase:
 --   Dashboard → SQL Editor → New query → colar → Run
 --
--- Pode rodar mais de uma vez sem estragar nada: tudo aqui é idempotente.
+-- Idempotente: pode rodar de novo sem estragar nada.
 -- ═══════════════════════════════════════════════════════════════════════
 
--- ── Por que uma tabela só, e não uma por tipo de dado ──────────────────
---
--- O app guarda cada tipo num documento inteiro ("todos os hábitos", "todos
--- os registros") e faz TODO o filtro no navegador — não existe consulta
--- por coluna, ordenação no servidor nem junção. Uma tabela por tipo daria
--- dezoito tabelas, dezoito políticas de RLS e uma migração a cada novo
--- campo, sem entregar nada que o app use.
---
--- Aqui cada linha é um documento: (dono, chave) → JSON. Um tipo novo de
--- dado não precisa de migração nenhuma.
---
--- O preço é não dar para consultar por dentro do JSON com eficiência. Se
--- um dia o app precisar disso, o caminho é promover AQUELE tipo para
--- tabela própria — não reescrever tudo.
-
-create table if not exists public.documentos (
-  usuario_id  uuid        not null references auth.users(id) on delete cascade,
-  chave       text        not null,
-  dados       jsonb       not null,
-  -- Carimbo de quem gravou por último. É o que decide o vencedor quando
-  -- dois aparelhos editam o mesmo documento.
+create table if not exists public.registros (
+  usuario_id    uuid        not null references auth.users(id) on delete cascade,
+  colecao       text        not null,
+  registro_id   text        not null,
+  dados         jsonb,
+  excluido      boolean     not null default false,
   atualizado_em timestamptz not null default now(),
-  primary key (usuario_id, chave)
+  primary key (usuario_id, colecao, registro_id)
 );
 
 -- ── Row Level Security ────────────────────────────────────────────────
---
--- É ISTO que protege os dados, não o sigilo da chave publishable — ela
--- aparece no JavaScript que qualquer um baixa. Sem RLS, essa chave daria
--- acesso a todas as linhas de todos os usuários.
 
-alter table public.documentos enable row level security;
+alter table public.registros enable row level security;
 
--- `auth.uid()` é o id do usuário do token JWT da requisição. Sem sessão
--- válida ele é nulo e nenhuma linha casa — anônimo não lê nem escreve.
-drop policy if exists "dono lê" on public.documentos;
-create policy "dono lê" on public.documentos
+drop policy if exists "dono lê" on public.registros;
+create policy "dono lê" on public.registros
   for select using ((select auth.uid()) = usuario_id);
 
-drop policy if exists "dono insere" on public.documentos;
-create policy "dono insere" on public.documentos
+drop policy if exists "dono insere" on public.registros;
+create policy "dono insere" on public.registros
   for insert with check ((select auth.uid()) = usuario_id);
 
--- `using` controla quais linhas podem ser alvo; `with check` impede que a
--- linha seja gravada com outro dono. Sem o segundo, daria para reatribuir
--- o próprio documento para a conta alheia.
-drop policy if exists "dono atualiza" on public.documentos;
-create policy "dono atualiza" on public.documentos
+drop policy if exists "dono atualiza" on public.registros;
+create policy "dono atualiza" on public.registros
   for update using ((select auth.uid()) = usuario_id)
           with check ((select auth.uid()) = usuario_id);
 
-drop policy if exists "dono apaga" on public.documentos;
-create policy "dono apaga" on public.documentos
+drop policy if exists "dono apaga" on public.registros;
+create policy "dono apaga" on public.registros
   for delete using ((select auth.uid()) = usuario_id);
 
 -- ── Índice ────────────────────────────────────────────────────────────
---
--- A sincronização pergunta "o que mudou desde X?" para este usuário. A
--- chave primária já cobre a busca por usuário, mas não a ordenação por
--- data — este índice cobre as duas coisas juntas.
-create index if not exists documentos_por_usuario_e_data
-  on public.documentos (usuario_id, atualizado_em desc);
+
+create index if not exists registros_por_usuario_e_data
+  on public.registros (usuario_id, atualizado_em);
 
 -- ── Carimbo automático ────────────────────────────────────────────────
---
--- O horário vem do BANCO, nunca do aparelho. Relógio de celular atrasado
--- ou adiantado faria a resolução de conflito escolher o documento errado.
+
+create or replace function public.marcar_atualizacao()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  new.atualizado_em := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists registros_carimbo on public.registros;
+create trigger registros_carimbo
+  before insert or update on public.registros
+  for each row execute function public.marcar_atualizacao();
+
+-- ── Tempo Real ────────────────────────────────────────────────────────
+
+do $$
+begin
+  alter publication supabase_realtime add table public.registros;
+exception
+  when duplicate_object then null;
+end
+$$;
+
+alter table public.registros replica identity full;
+her o documento errado.
 create or replace function public.marcar_atualizacao()
 returns trigger
 language plpgsql

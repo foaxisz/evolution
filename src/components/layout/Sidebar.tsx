@@ -9,10 +9,12 @@ import {
   CheckSquare,
   Timer,
   LogOut,
+  RefreshCw,
 } from 'lucide-react';
 import type { Page } from '../../types';
 import Logo from '../ui/Logo';
 import { useAutenticacao } from '../../lib/auth';
+import { recomecar } from '../../lib/sincronizacao';
 import BotaoInstalarPWA from '../ui/BotaoInstalarPWA';
 
 interface NavItem {
@@ -82,18 +84,30 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border px-5 py-4 space-y-3">
+      <div className="border-t border-border px-5 py-4 space-y-2.5">
         <BotaoInstalarPWA />
         {email && (
-          <button
-            onClick={sair}
-            className="flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger"
-          >
-            <LogOut size={12} />
-            Sair
-          </button>
+          <div className="space-y-1.5 pt-1">
+            <p className="text-[11px] text-text-muted truncate">{email}</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { recomecar(); window.location.reload(); }}
+                className="flex items-center gap-1.5 text-xs text-accent-light transition-colors hover:text-accent"
+              >
+                <RefreshCw size={12} />
+                Resincronizar
+              </button>
+              <button
+                onClick={sair}
+                className="flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger ml-auto"
+              >
+                <LogOut size={12} />
+                Sair
+              </button>
+            </div>
+          </div>
         )}
-        <p className="text-xs text-text-muted">Versão 1.0.0</p>
+        <p className="text-xs text-text-muted pt-1">Versão 1.0.0</p>
       </div>
     </aside>
   );
