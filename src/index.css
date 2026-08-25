@@ -137,26 +137,23 @@ body {
       inset 0 0 12px color-mix(in oklab, var(--color-accent) 8%, transparent);
   }
 
-  /* Borda que ACENDE, para as bandeiras de prioridade.
+  /* Um fio de brilho na borda das bandeiras de prioridade — só o bastante
+   * para o traço parecer aceso em vez de pintado.
    *
-   * Mesma receita do `.glow-box` — brilho para fora, brilho fraco para
-   * dentro — mas na cor que vier em `--cor-acesa`, porque aqui ela muda por
-   * nível. É esta a diferença entre sinal de arcade e borda colorida de
-   * painel: no arcade o traço não tem cor, ele emite. Sem o brilho, um
-   * vermelho saturado numa borda de 2px lê como aviso de formulário.
+   * Foi por aqui uma versão com 38% para fora e um brilho interno de 14px:
+   * de longe a lista virava uma fileira de letreiros, e o brilho de dentro
+   * fazia mancha atrás do nome da tarefa. Numa LISTA o mesmo efeito se
+   * repete cinco, dez vezes empilhado — o que passa como enfeite numa peça
+   * só vira poluição multiplicado.
    *
-   * O brilho de dentro é fraco de propósito (10%): passando disso ele virava
-   * um degradê por trás do nome da tarefa e competia com o texto. */
+   * Sem brilho interno, e o de fora bem curto: some contra o fundo a meio
+   * metro e só se percebe olhando a fileira. */
   .borda-acesa {
-    box-shadow:
-      0 0 8px color-mix(in oklab, var(--cor-acesa) 38%, transparent),
-      inset 0 0 14px color-mix(in oklab, var(--cor-acesa) 10%, transparent);
+    box-shadow: 0 0 4px color-mix(in oklab, var(--cor-acesa) 15%, transparent);
   }
 
-  /* A mesma ideia na caixa de marcar, mais apertada: ela é pequena, e um
-     halo de 8px em volta de 18px de lado vira borrão. */
   .check-aceso {
-    box-shadow: 0 0 6px color-mix(in oklab, var(--cor-acesa) 45%, transparent);
+    box-shadow: 0 0 3px color-mix(in oklab, var(--cor-acesa) 18%, transparent);
   }
 
   /* Botão com gradiente — o toque moderno sobre a base Matrix */
