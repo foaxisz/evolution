@@ -715,6 +715,25 @@ export function saveAction(action: Omit<Action, 'id' | 'createdAt' | 'completed'
   return newAction;
 }
 
+/**
+ * Remenda campos de uma tarefa que já existe.
+ *
+ * Separado de `saveAction` de propósito: aquele é para CRIAR, e por isso
+ * exige `name`. Alargar a assinatura dele para aceitar parciais tiraria a
+ * garantia de que uma tarefa nunca nasce sem nome.
+ *
+ * `undefined` num campo é o valor legítimo de "sem isto" — `JSON.stringify`
+ * simplesmente omite a chave, e é assim que a bandeira cinza tira a
+ * prioridade e "Algum dia" tira o vencimento.
+ */
+export function updateAction(id: string, campos: Partial<Omit<Action, 'id' | 'createdAt'>>): void {
+  const actions = getActions();
+  const idx = actions.findIndex(a => a.id === id);
+  if (idx < 0) return;
+  actions[idx] = { ...actions[idx], ...campos };
+  save('evo_actions', actions);
+}
+
 export function toggleAction(id: string): void {
   const actions = getActions();
   const action = actions.find(a => a.id === id);

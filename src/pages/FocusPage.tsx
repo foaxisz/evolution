@@ -4,7 +4,7 @@ import {
   ArrowLeft, Pencil, Plus, Flag, History, X,
 } from 'lucide-react';
 import {
-  getActions, saveAction, toggleAction, deleteAction,
+  getActions, saveAction, updateAction, toggleAction, deleteAction,
   getSessoesDeFoco, addSessaoDeFoco,
   getFocoEmAndamento, setFocoEmAndamento,
   getAjustesDeFoco, setAjustesDeFoco, type AjustesDeFoco,
@@ -14,6 +14,7 @@ import {
 import type { FocoEmAndamento, SessaoDeFoco, Action, CategoriaDeFoco } from '../types';
 import { terminou, msDecorridos, formatarDuracao, formatarDuracaoCurta, tocarAviso, tocarConclusao, tocarInicio } from '../lib/pomodoro';
 import { hojeISO, somarDias, segundaDaSemana, diaLocal, horaLocal } from '../lib/data';
+import { ordenarTarefas, reordenar, mudaramDeOrdem } from '../lib/tarefas';
 import HabitIcon from '../components/ui/HabitIcon';
 import Modal from '../components/ui/Modal';
 import PilulaDeFoco from '../components/foco/PilulaDeFoco';
@@ -23,6 +24,8 @@ import ModalDeTarefas from '../components/foco/ModalDeTarefas';
 import PainelDeDados from '../components/foco/PainelDeDados';
 import PaginaDeMetas from '../components/foco/PaginaDeMetas';
 import CaixaDeMarcar from '../components/foco/CaixaDeMarcar';
+import LinhaDeTarefa from '../components/foco/LinhaDeTarefa';
+import MenuDeTarefa from '../components/foco/MenuDeTarefa';
 import { PixelLista } from '../components/foco/PixelIcons';
 
 const SUGESTOES = [
@@ -374,9 +377,48 @@ function EspacoDaFrente({
   const [, setTique] = useState(0);
   const repintar = useCallback(() => setTique(t => t + 1), []);
 
+  // Menu de contexto: qual tarefa e onde. Um só de cada vez — dois abertos
+  // é um estado que não deveria existir.
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // Arrasto: de quem, e sobre quem está agora.
+  const [arrasto, setArrasto] = useState<{ de: string; sobre: string } | null>(null);
+
   const daFrente = acoes.filter(a => a.categoriaId === categoria.id);
-  const pendentes = daFrente.filter(a => !a.completed);
+  const pendentes = ordenarTarefas(daFrente.filter(a => !a.completed));
   const concluidas = daFrente.filter(a => a.completed);
+
+  const acaoDoMenu = menu ? pendentes.find(a => a.id === menu.id) ?? null : null;
+
+  /** Grava o vencimento. `undefined` limpa ("Algum dia"). */
+  const definirVencimento = useCallback((id: string, dia: string | undefined) => {
+    updateAction(id, { dueDate: dia });
+    setAcoes(getActions());
+  }, []);
+
+  /** Grava a prioridade. `undefined` limpa (bandeira cinza). */
+  const definirPrioridade = useCallback((id: string, p: 1 | 2 | 3 | undefined) => {
+    updateAction(id, { prioridade: p });
+    setAcoes(getActions());
+  }, []);
+
+  /**
+   * Solta a tarefa arrastada na posição da que está sob o cursor.
+   *
+   * Renumera a lista visível e grava só as que de fato mudaram de posição —
+   * `mudaramDeOrdem` existe para isso. Gravar as inalteradas encheria a fila
+   * de sincronização de linhas idênticas.
+   */
+  const soltarTarefa = useCallback(() => {
+    setArrasto(atual => {
+      if (!atual) return null;
+      const nova = reordenar(pendentes, atual.de, atual.sobre);
+      for (const t of mudaramDeOrdem(pendentes, nova)) {
+        updateAction(t.id, { ordem: t.ordem });
+      }
+      setAcoes(getActions());
+      return null;
+    });
+  }, [pendentes]);
 
   const registrar = useCallback((s: FocoEmAndamento, completa: boolean) => {
     const teto = s.minutosPlanejados * 60_000;
@@ -817,17 +859,31 @@ function EspacoDaFrente({
         </label>
 
         <div>
-          {pendentes.map(a => (
-            <LinhaDeTarefa
-              key={a.id}
-              acao={a}
-              cor={cor}
-              focando={foco?.actionId === a.id}
-              segundosFocados={tempoPorTarefa.get(a.id) ?? 0}
-              onAlternar={() => alternarTarefa(a.id)}
-              onFocar={() => focarNaTarefa(a.id)}
-            />
-          ))}
+          {pendentes.map((a, i) => {
+            // De onde o fio de destino aparece: acima quando a linha
+            // arrastada vem de baixo, abaixo quando vem de cima.
+            const alvo = arrasto?.sobre === a.id && arrasto.de !== a.id;
+            const deIndice = arrasto ? pendentes.findIndex(x => x.id === arrasto.de) : -1;
+
+            return (
+              <LinhaDeTarefa
+                key={a.id}
+                acao={a}
+                cor={cor}
+                focando={foco?.actionId === a.id}
+                segundosFocados={tempoPorTarefa.get(a.id) ?? 0}
+                arrastada={arrasto?.de === a.id}
+                indicador={alvo ? (deIndice > i ? 'acima' : 'abaixo') : null}
+                onAlternar={() => alternarTarefa(a.id)}
+                onFocar={() => focarNaTarefa(a.id)}
+                onMenu={(x, y) => setMenu({ id: a.id, x, y })}
+                onIniciarArrasto={() => setArrasto({ de: a.id, sobre: a.id })}
+                onArrastarSobre={() => setArrasto(at => (at && at.sobre !== a.id ? { ...at, sobre: a.id } : at))}
+                onSoltar={soltarTarefa}
+                onTerminarArrasto={() => setArrasto(null)}
+              />
+            );
+          })}
 
           {pendentes.length === 0 && (
             <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-text-muted">
@@ -836,6 +892,18 @@ function EspacoDaFrente({
           )}
 
         </div>
+
+        {acaoDoMenu && menu && (
+          <MenuDeTarefa
+            acao={acaoDoMenu}
+            posicao={{ x: menu.x, y: menu.y }}
+            cor={cor}
+            onVencimento={dia => definirVencimento(menu.id, dia)}
+            onPrioridade={p => definirPrioridade(menu.id, p)}
+            onExcluir={() => { deleteAction(menu.id); setAcoes(getActions()); }}
+            onFechar={() => setMenu(null)}
+          />
+        )}
       </section>
 
       {/* ── Blocos de hoje ── */}
@@ -1004,74 +1072,6 @@ function Placar({
  * O tempo já focado ocupa o vão morto que existia entre o nome e o play:
  * é a informação que a pessoa quer ali, e o dado já existe nas sessões.
  */
-function LinhaDeTarefa({
-  acao, cor, focando, segundosFocados, onAlternar, onFocar,
-}: {
-  acao: Action;
-  cor: string;
-  focando: boolean;
-  segundosFocados: number;
-  onAlternar: () => void;
-  onFocar: () => void;
-}) {
-  return (
-    <div
-      className="group mb-2 flex items-center gap-3 rounded-xl border-solid bg-bg-card px-4 py-2 transition-[border-color,background-color] duration-200 last:mb-0 hover:bg-bg-card-hover"
-      style={{
-        // 2px em vez de 1: o fio de 1px sumia contra o fundo escuro.
-        //
-        // Borda neutra e fundo neutro, inclusive na tarefa em foco. Quem
-        // sinaliza é só o play aceso: pintar a borda puxava a fileira
-        // inteira para o roxo, e pintar o fundo lia como marca-texto por
-        // trás do nome.
-        borderWidth: 2,
-        borderColor: 'var(--color-border)',
-      }}
-    >
-      <CaixaDeMarcar
-        marcada={acao.completed}
-        cor={cor}
-        rotulo={acao.completed ? 'Reabrir tarefa' : 'Concluir tarefa'}
-        onAlternar={onAlternar}
-      />
-
-      <span className={`font-terminal min-w-0 flex-1 truncate text-[17px] leading-[1.35] ${acao.completed ? 'text-text-muted line-through' : 'text-text-primary'}`}>
-        {acao.name}
-      </span>
-
-      {segundosFocados > 0 && (
-        <span className="flex-shrink-0 font-arcade text-[0.5rem] text-text-muted" title="tempo já focado nesta tarefa">
-          {formatarDuracao(segundosFocados)}
-        </span>
-      )}
-
-      {!acao.completed && (
-        <button
-          onClick={onFocar}
-          aria-label={`Focar em ${acao.name}`}
-          title={focando ? 'Abrir o foco em tela cheia' : 'Focar nesta tarefa'}
-          // 24px: é a caixa de linha do nome (17px × 1,35 ≈ 23). Com 30 o
-          // botão era mais alto que o texto e ditava sozinho a altura da
-          // fileira. `.alvo-toque` mantém a área de toque grande sem que o
-          // desenho cresça junto.
-          className="alvo-toque flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full transition-[background-color,color] duration-200"
-          style={{
-            // Redondo, sem contorno. A caixa quadrada com borda ficava do
-            // lado do quadrado do checkbox e a linha virava duas caixinhas
-            // iguais; o círculo separa as duas ações na hora.
-            backgroundColor: focando ? cor : `color-mix(in oklab, ${cor} 16%, transparent)`,
-            color: focando ? 'var(--color-bg-primary)' : cor,
-          }}
-        >
-          {/* 1px à direita: o triângulo tem o peso na base, então centrado
-              pelo retângulo que o envolve ele parece encostado na esquerda. */}
-          <Play size={13} fill="currentColor" strokeWidth={0} className="translate-x-px" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 function CategoriaModal({
   alvo, onFechar, onSalvar, onExcluir,
 }: {

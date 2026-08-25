@@ -17,12 +17,21 @@ import { Check } from 'lucide-react';
  * que uma linha de estado resolve.
  */
 export default function CaixaDeMarcar({
-  marcada, cor, rotulo, tamanho = 18, onAlternar,
+  marcada, cor, rotulo, tamanho = 18, realcada = false, onAlternar,
 }: {
   marcada: boolean;
   cor: string;
   rotulo: string;
   tamanho?: number;
+  /**
+   * Mostra a cor já em repouso, sem esperar o mouse.
+   *
+   * Existe para a prioridade da tarefa. A regra normal — borda neutra até
+   * apontar — serve para anunciar que a caixa é clicável; a prioridade é
+   * outra coisa: é informação permanente, e informação que só aparece sob o
+   * cursor não informa.
+   */
+  realcada?: boolean;
   onAlternar: () => void;
 }) {
   const [apontando, setApontando] = useState(false);
@@ -40,7 +49,7 @@ export default function CaixaDeMarcar({
       style={{
         width: tamanho,
         height: tamanho,
-        borderColor: marcada || apontando ? cor : 'var(--color-border-light)',
+        borderColor: marcada || apontando || realcada ? cor : 'var(--color-border-light)',
         // Preenchimento neutro ao apontar, não uma mistura da cor da frente:
         // quem sinaliza é a borda acesa mais o tique surgindo, e um
         // `color-mix` aqui é uma dependência a mais para um fundo que

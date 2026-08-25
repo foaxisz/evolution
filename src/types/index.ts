@@ -116,6 +116,10 @@ export interface Action {
   /** Categoria de foco a que a ação pertence. Ausente = sem categoria. */
   categoriaId?: string;
   dueDate?: string;
+  /** 1 baixa, 2 média, 3 alta. Ausente = sem prioridade (bandeira cinza). */
+  prioridade?: 1 | 2 | 3;
+  /** Posição na lista da categoria. Ausente = ordena por `createdAt`. */
+  ordem?: number;
   completed: boolean;
   createdAt: string;
   completedAt?: string;
