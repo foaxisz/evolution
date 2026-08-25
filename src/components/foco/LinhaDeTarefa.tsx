@@ -72,24 +72,22 @@ export default function LinhaDeTarefa({
         // Cursor normal, sem mãozinha de agarrar: a tarefa é uma linha de
         // texto que também se arrasta, não uma alça. Trocar o cursor em toda
         // a fileira anunciava o arrasto como se fosse a ação principal dela.
-        className={`group flex select-none items-center gap-3 rounded-xl border-solid bg-bg-card px-4 py-2 transition-[border-color,background-color,opacity] duration-200 hover:bg-bg-card-hover ${corPrioridade ? 'borda-acesa' : ''} ${arrastada ? 'opacity-40' : ''}`}
+        // Sem `hover:` nenhum: passar o mouse não muda nada na fileira.
+        // O fundo clareava, e como a fileira inteira reagia, ela se anunciava
+        // como um botão só — quando na verdade as ações são o check, o play e
+        // o menu do botão direito. Ler a lista não é estar a ponto de clicar.
+        className={`group flex select-none items-center gap-3 rounded-xl border-solid bg-bg-card px-4 py-2 transition-[border-color,opacity] duration-200 ${arrastada ? 'opacity-40' : ''}`}
         style={{
           // 2px em vez de 1: o fio de 1px sumia contra o fundo escuro.
           //
-          // A borda é a cor CHEIA da bandeira, a mesma do check. Estava
-          // misturada 45% com a neutra para não gritar, e o resultado foi
-          // pior: dois vermelhos diferentes na mesma fileira, um na borda e
-          // outro na caixinha, como se significassem coisas distintas.
-          //
-          // O que impede de gritar não é diluir a cor, é o brilho: com o
-          // `.borda-acesa` o traço EMITE em vez de só ser pintado, e é isso
-          // que faz ler como segmento aceso de arcade em vez de aviso de
-          // formulário. Diluir tirava justamente a saturação de que o
-          // fósforo precisa.
+          // A borda é a cor CHEIA da bandeira, a mesma do check — e nada
+          // mais. Passaram por aqui duas tentativas de fazê-la "render
+          // melhor": diluir 45% na neutra, que só criou dois vermelhos
+          // diferentes na mesma fileira; e um brilho de fósforo em volta,
+          // que numa lista de cinco tarefas virava fileira de letreiros.
+          // A cor sozinha, saturada e limpa, era o suficiente desde o começo.
           borderWidth: 2,
           borderColor: corPrioridade ?? 'var(--color-border)',
-          // Alimenta o `color-mix` das classes de brilho.
-          ...(corPrioridade && { ['--cor-acesa' as string]: corPrioridade }),
         }}
       >
         <CaixaDeMarcar

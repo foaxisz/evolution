@@ -137,24 +137,14 @@ body {
       inset 0 0 12px color-mix(in oklab, var(--color-accent) 8%, transparent);
   }
 
-  /* Um fio de brilho na borda das bandeiras de prioridade — só o bastante
-   * para o traço parecer aceso em vez de pintado.
+  /* Não existe classe de brilho para a prioridade, e é de propósito.
    *
-   * Foi por aqui uma versão com 38% para fora e um brilho interno de 14px:
-   * de longe a lista virava uma fileira de letreiros, e o brilho de dentro
-   * fazia mancha atrás do nome da tarefa. Numa LISTA o mesmo efeito se
-   * repete cinco, dez vezes empilhado — o que passa como enfeite numa peça
-   * só vira poluição multiplicado.
+   * Passaram por aqui um halo de 8px a 38% com brilho interno, e depois um
+   * fio de 4px a 15%. Os dois erravam pelo mesmo motivo: o efeito era
+   * calibrado numa peça só, mas vive numa LISTA, onde se repete empilhado.
+   * O que passa como enfeite isolado vira poluição multiplicado.
    *
-   * Sem brilho interno, e o de fora bem curto: some contra o fundo a meio
-   * metro e só se percebe olhando a fileira. */
-  .borda-acesa {
-    box-shadow: 0 0 4px color-mix(in oklab, var(--cor-acesa) 15%, transparent);
-  }
-
-  .check-aceso {
-    box-shadow: 0 0 3px color-mix(in oklab, var(--cor-acesa) 18%, transparent);
-  }
+   * A borda na cor cheia, saturada e limpa, já bastava. */
 
   /* Botão com gradiente — o toque moderno sobre a base Matrix */
   .btn-grad {

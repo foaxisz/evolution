@@ -45,14 +45,10 @@ export default function CaixaDeMarcar({
       onBlur={() => setApontando(false)}
       aria-label={rotulo}
       aria-pressed={marcada}
-      className={`alvo-toque flex flex-shrink-0 items-center justify-center rounded-[3px] border-2 transition-[background-color,border-color] duration-200 focus:outline-none ${realcada && !marcada ? 'check-aceso' : ''}`}
+      className="alvo-toque flex flex-shrink-0 items-center justify-center rounded-[3px] border-2 transition-[background-color,border-color] duration-200 focus:outline-none"
       style={{
         width: tamanho,
         height: tamanho,
-        // Só quando realçada: alimenta o `color-mix` do brilho. Marcada, a
-        // caixa já está preenchida na cor e o halo em volta de um bloco
-        // cheio só engorda a borda.
-        ...(realcada && { ['--cor-acesa' as string]: cor }),
         borderColor: marcada || apontando || realcada ? cor : 'var(--color-border-light)',
         // Preenchimento neutro ao apontar, não uma mistura da cor da frente:
         // quem sinaliza é a borda acesa mais o tique surgindo, e um
