@@ -154,8 +154,12 @@ body {
       var(--color-accent) 55%,
       var(--color-accent-light)
     );
+    /* Sombra curta, não auréola. Estava em 16px a 32% e o botão parecia
+       aceso por trás — num cartão escuro isso lê como halo, não como
+       relevo. O `inset` fica: ele é o brilho de cima da borda, que dá o
+       volume, e não espalha nada para fora. */
     box-shadow:
-      0 4px 16px color-mix(in oklab, var(--color-accent) 32%, transparent),
+      0 2px 8px color-mix(in oklab, var(--color-accent) 16%, transparent),
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
   }
 

@@ -654,7 +654,15 @@ function CountHabitCard({
         </button>
         <button
           onClick={() => onChange(1)}
-          className="btn-grad flex h-11 flex-[2] items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition-transform active:scale-95"
+          // `flex-1` como o de tirar, não `flex-[2]`: os dois fazem a mesma
+          // coisa em sentidos opostos, e dar o dobro da largura a um deles
+          // sugeria que tirar fosse a ação secundária. Beber de menos e
+          // corrigir para baixo é tão comum quanto somar.
+          // `border-transparent` só para bater a caixa com a do vizinho, que
+          // tem 1px de borda de cada lado. Sem isso os dois `flex-1` davam
+          // 179 e 181px — invisível, mas os dois botões deixavam de ser
+          // exatamente metade e metade.
+          className="btn-grad flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-transparent text-sm font-semibold text-white transition-transform active:scale-95"
         >
           <Plus size={16} />
           Adicionar

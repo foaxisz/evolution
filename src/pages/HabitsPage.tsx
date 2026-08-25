@@ -10,17 +10,42 @@ import HabitIcon, { HABIT_ICONS, HABIT_ICON_KEYS } from '../components/ui/HabitI
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+/**
+ * Vinte cores, na ordem da roda — não na ordem em que foram surgindo.
+ *
+ * Eram dez, e faltava justamente o meio da roda: nenhum vermelho de verdade,
+ * nenhum magenta, nada entre o verde e o ciano. Em ordem de matiz o seletor
+ * lê como um espectro, e achar "o azul um pouco mais escuro" é seguir a
+ * fileira em vez de varrer dez botões espalhados.
+ *
+ * As dez originais continuam todas aqui, com o mesmo código: hábito já salvo
+ * guarda o hex, e tirar uma da lista deixaria a cor dele órfã — ainda
+ * pintada na tela, mas sem aparecer como escolhida no seletor.
+ *
+ * Saturadas de propósito. A paleta base do app é fósforo, e cor lavada num
+ * seletor de dez em diante vira uma fileira de cinzas coloridos.
+ */
 const PRESET_COLORS = [
+  '#ff2d2d', // vermelho
+  '#ff6b35', // laranja
+  '#ff9500', // tangerina
+  '#ffb000', // âmbar
+  '#ffe600', // amarelo
+  '#c6ff00', // lima
+  '#2bff70', // verde-neon
+  '#3ddc97', // verde
+  '#00ffc8', // menta
+  '#00e5ff', // turquesa
+  '#38bdf8', // ciano
+  '#4d8bff', // azul
+  '#7c3aed', // violeta profundo
   '#a855f7', // roxo (padrão)
   '#c88cff', // lavanda
-  '#7c3aed', // violeta profundo
-  '#38bdf8', // ciano
-  '#3ddc97', // verde
-  '#ffb000', // âmbar
-  '#ff6b35', // laranja
+  '#e05cff', // orquídea
+  '#ff4dd2', // magenta
   '#ff4d8d', // rosa
-  '#00e5ff', // turquesa
-  '#ffe600', // amarelo
+  '#ff8fa3', // rosa-claro
+  '#e8e6f5', // branco-fósforo
 ];
 
 interface FormData {
