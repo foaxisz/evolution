@@ -28,6 +28,16 @@
   --color-info: #38bdf8;
   --color-info-bg: rgba(56, 189, 248, 0.12);
 
+  /* ── Fósforo de arcade: as bandeiras de prioridade ───────
+     Separadas de sucesso/aviso/perigo de propósito. Aquelas são cores de
+     PAINEL, escolhidas para conviver com texto e gráfico sem gritar — o
+     verde é menta, o "perigo" é rosa. Numa bandeira de prioridade isso não
+     serve: ela é um sinal, e sinal de arcade é fósforo saturado, do tipo que
+     um CRT acendia. Vermelho aqui é vermelho, não rosa. */
+  --color-prio-alta: #ff2d2d;
+  --color-prio-media: #ffd000;
+  --color-prio-baixa: #2bff70;
+
   --color-cookie: #ffb000;
   --color-cookie-bg: rgba(255, 176, 0, 0.08);
 

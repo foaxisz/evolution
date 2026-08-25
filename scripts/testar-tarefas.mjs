@@ -126,9 +126,10 @@ console.log('\nReordenar por arrasto:');
 console.log('\nPrioridade:');
 ok('três níveis, nunca quatro', PRIORIDADES.length, 3);
 ok('cinza é a ausência, não um nível', corDaPrioridade(undefined), null);
-ok('alta é a cor de perigo do app', corDaPrioridade(3), 'var(--color-danger)');
-ok('todas as cores vêm de variáveis já existentes',
-  PRIORIDADES.every(p => p.cor.startsWith('var(--color-')), true);
+ok('alta é o vermelho de arcade, não o rosa de perigo',
+  corDaPrioridade(3), 'var(--color-prio-alta)');
+ok('todas as cores saem de variáveis do tema',
+  PRIORIDADES.every(p => p.cor.startsWith('var(--color-prio-')), true);
 
 console.log(falhas === 0 ? '\nTodos passaram.' : `\n${falhas} falha(s).`);
 process.exit(falhas === 0 ? 0 : 1);

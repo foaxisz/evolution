@@ -56,7 +56,7 @@ export default function MenuDeTarefa({
   onFechar: () => void;
 }) {
   const caixa = useRef<HTMLDivElement>(null);
-  const [fase, setFase] = useState<'entrando' | 'aberto' | 'saindo'>('entrando');
+  const [saindo, setSaindo] = useState(false);
   const [ajuste, setAjuste] = useState<{ x: number; y: number } | null>(null);
   const [submenu, setSubmenu] = useState(false);
   const [submenuAEsquerda, setSubmenuAEsquerda] = useState(false);
@@ -89,16 +89,10 @@ export default function MenuDeTarefa({
     setAjuste({ x, y });
   }, [posicao.x, posicao.y]);
 
-  // Um quadro depois de montar, para a transição ter de onde sair.
-  useEffect(() => {
-    const r = requestAnimationFrame(() => setFase('aberto'));
-    return () => cancelAnimationFrame(r);
-  }, []);
-
   function fechar() {
     if (fechando.current) return;
     fechando.current = true;
-    setFase('saindo');
+    setSaindo(true);
     setTimeout(onFechar, ANIMACAO_MS);
   }
 
@@ -159,10 +153,10 @@ export default function MenuDeTarefa({
   }
 
   const item =
-    'font-terminal flex w-full items-center gap-2 px-3 py-1.5 text-left text-[15px] leading-tight ' +
-    'text-text-secondary transition-colors hover:bg-bg-card-hover hover:text-text-primary';
+    'font-terminal flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[15px] ' +
+    'leading-tight text-text-secondary transition-colors hover:bg-bg-card-hover hover:text-text-primary';
   const rotuloSecao =
-    'font-arcade px-3 pb-1 pt-2 text-[0.4rem] uppercase leading-none text-text-muted';
+    'font-arcade px-2.5 pb-1 pt-2 text-[0.4rem] uppercase leading-none text-text-muted';
 
   const atalhos: { rotulo: string; dia: string | undefined }[] = [
     { rotulo: 'Vence hoje', dia: hoje },
@@ -175,7 +169,22 @@ export default function MenuDeTarefa({
       ref={caixa}
       role="menu"
       aria-label={`Opções de ${acao.name}`}
-      className="fixed z-50 w-60 overflow-hidden rounded-lg border border-solid py-1 shadow-xl"
+      /*
+       * SEM `overflow-hidden`. Ele estava aqui para os realces das linhas não
+       * vazarem os cantos redondos — e recortava o submenu, que nasce em
+       * `left: 100%`, FORA da caixa. O calendário existia no DOM e era
+       * invisível. Os cantos ficam resolvidos pelo `p-1` daqui com o
+       * `rounded-md` das linhas: elas não alcançam mais a curva da borda.
+       *
+       * A entrada é a `animate-scale-in` que o app já usa nos modais, e não
+       * uma transição minha disparada por `requestAnimationFrame`. Com o rAF
+       * o estilo de repouso era `opacity: 0`, então numa aba que não está
+       * compositando quadros — de fundo, minimizada — o callback nunca roda e
+       * o menu ficava invisível para sempre. Assim o repouso é VISÍVEL e a
+       * animação só enfeita: se ela não rodar, o menu ainda serve. De quebra,
+       * a classe do projeto já respeita `prefers-reduced-motion`.
+       */
+      className={`fixed z-50 w-60 rounded-lg border border-solid p-1 shadow-xl ${saindo ? '' : 'animate-scale-in'}`}
       style={{
         // Enquanto não mediu, fica fora da tela: aparecer no lugar errado e
         // corrigir depois é pior que aparecer um quadro mais tarde.
@@ -184,13 +193,14 @@ export default function MenuDeTarefa({
         borderWidth: 2,
         borderColor: 'var(--color-border)',
         backgroundColor: 'var(--color-bg-card)',
-        opacity: fase === 'aberto' ? 1 : 0,
-        // Escala quase imperceptível: o menu cresce de onde o cursor está,
-        // em vez de surgir pronto. Mais que isso vira animação de app de
-        // celular e atrasa quem já sabe o que quer clicar.
-        transform: fase === 'aberto' ? 'scale(1)' : 'scale(0.96)',
         transformOrigin: 'top left',
-        transition: `opacity ${ANIMACAO_MS}ms ease-out, transform ${ANIMACAO_MS}ms ease-out`,
+        // Só a SAÍDA é inline. A classe de entrada sai junto (animação vence
+        // estilo inline, então mantê-la aqui anularia o desaparecimento).
+        ...(saindo && {
+          opacity: 0,
+          transform: 'scale(0.96)',
+          transition: `opacity ${ANIMACAO_MS}ms ease-out, transform ${ANIMACAO_MS}ms ease-out`,
+        }),
       }}
     >
       {atalhos.map(a => (

@@ -38,7 +38,11 @@ export default function LinhaDeTarefa({
   const vencimento = acao.dueDate ? rotuloDeVencimento(acao.dueDate, hojeISO()) : null;
 
   return (
-    <div className="relative">
+    // O espaçamento vive AQUI, no invólucro, não na fileira de dentro.
+    // Estava na de dentro e `last:mb-0` passou a valer sempre: envolvida, a
+    // fileira é sempre filha única, logo sempre `:last-child` — e a lista
+    // inteira ficou sem respiro entre as tarefas.
+    <div className="relative mb-2 last:mb-0">
       {/* O fio de onde a linha cairia. Fora do bloco arrastável e em
           `absolute` para não empurrar a lista e fazer tudo pular a cada
           pixel do arrasto. */}
@@ -65,7 +69,10 @@ export default function LinhaDeTarefa({
           e.preventDefault();
           onMenu(e.clientX, e.clientY);
         }}
-        className={`group mb-2 flex cursor-grab select-none items-center gap-3 rounded-xl border-solid bg-bg-card px-4 py-2 transition-[border-color,background-color,opacity] duration-200 last:mb-0 hover:bg-bg-card-hover active:cursor-grabbing ${arrastada ? 'opacity-40' : ''}`}
+        // Cursor normal, sem mãozinha de agarrar: a tarefa é uma linha de
+        // texto que também se arrasta, não uma alça. Trocar o cursor em toda
+        // a fileira anunciava o arrasto como se fosse a ação principal dela.
+        className={`group flex select-none items-center gap-3 rounded-xl border-solid bg-bg-card px-4 py-2 transition-[border-color,background-color,opacity] duration-200 hover:bg-bg-card-hover ${arrastada ? 'opacity-40' : ''}`}
         style={{
           // 2px em vez de 1: o fio de 1px sumia contra o fundo escuro.
           //
@@ -101,7 +108,10 @@ export default function LinhaDeTarefa({
           <span
             className="font-arcade flex-shrink-0 text-[0.5rem] leading-none"
             style={{
-              color: vencimento.atrasado ? 'var(--color-danger)' : 'var(--color-text-muted)',
+              // O mesmo vermelho da bandeira alta: atrasado e urgente são o
+              // mesmo alarme, e dois vermelhos diferentes na mesma fileira
+              // fariam parecer que significam coisas diferentes.
+              color: vencimento.atrasado ? 'var(--color-prio-alta)' : 'var(--color-text-muted)',
             }}
             title={`Vence em ${acao.dueDate}`}
           >

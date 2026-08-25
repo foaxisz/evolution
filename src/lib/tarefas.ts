@@ -17,14 +17,18 @@
 export type Prioridade = 1 | 2 | 3;
 
 /**
- * As cores saem das variáveis que o app já usa. Nenhuma cor nova entrou
- * para isto: verde é o mesmo verde de sucesso, âmbar o mesmo de aviso,
- * vermelho o mesmo de perigo.
+ * Fósforo de arcade, não cor de painel.
+ *
+ * A primeira versão reusava sucesso/aviso/perigo do tema, para não
+ * introduzir cor nova. Errado: aquelas existem para conviver com texto e
+ * gráfico sem gritar — o verde é menta e o "perigo" é rosa-choque. Bandeira
+ * de prioridade é sinal, e sinal de arcade é saturado: vermelho tem de ler
+ * como VERMELHO.
  */
 export const PRIORIDADES: { nivel: Prioridade; rotulo: string; cor: string }[] = [
-  { nivel: 1, rotulo: 'Baixa', cor: 'var(--color-success)' },
-  { nivel: 2, rotulo: 'Média', cor: 'var(--color-warning)' },
-  { nivel: 3, rotulo: 'Alta', cor: 'var(--color-danger)' },
+  { nivel: 1, rotulo: 'Baixa', cor: 'var(--color-prio-baixa)' },
+  { nivel: 2, rotulo: 'Média', cor: 'var(--color-prio-media)' },
+  { nivel: 3, rotulo: 'Alta', cor: 'var(--color-prio-alta)' },
 ];
 
 /** A bandeira cinza: tirar a prioridade. */
