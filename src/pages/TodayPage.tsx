@@ -52,11 +52,27 @@ export default function TodayPage({ onNavigate }: TodayPageProps) {
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const todayDow = today.getDay();
-  // Janela rolante de 7 dias terminando hoje. Com a semana de calendário,
-  // num domingo todos os outros dias caem no futuro e não dá pra marcar
-  // um dia esquecido — que é justamente o caso de uso.
+  /*
+   * A semana do calendário: domingo a sábado, sempre nessa ordem.
+   *
+   * Era uma janela rolante de 7 dias terminando hoje, e o preço era a ordem
+   * mudar de lugar todo dia: numa terça a faixa começava numa quarta. Isso
+   * torna impossível o que a faixa existe para fazer, que é bater o olho e
+   * saber como foi a semana — não há posição fixa para procurar.
+   *
+   * O que a janela rolante resolvia era outra coisa: no domingo, com a
+   * semana de calendário, os outros seis dias caem no futuro e não há dia
+   * passado para marcar. Isso continua verdade, mas é preço de começo de
+   * semana e não de todo dia; e o dia futuro já vem desabilitado e apagado,
+   * então a faixa mostra a semana pela frente em vez de mentir sobre a
+   * ordem. Para corrigir um dia esquecido da semana anterior, o caminho é a
+   * própria página de Hábitos.
+   *
+   * `subDays` com valor negativo soma: em i=0 recua até o domingo, e daí
+   * anda para frente até o sábado.
+   */
   const weekDayStrings = Array.from({ length: 7 }, (_, i) =>
-    format(subDays(today, 6 - i), 'yyyy-MM-dd')
+    format(subDays(today, todayDow - i), 'yyyy-MM-dd')
   );
   const rawDate = format(today, "EEEE, d 'de' MMMM", { locale: ptBR });
   const dateHeader = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
@@ -696,7 +712,7 @@ function WeekHabitCard({
       habit={habit}
       isCompleted={feitos >= habit.frequency}
       foraDoDia={foraDoDia}
-      subtitle="Últimos 7 dias"
+      subtitle="Esta semana"
       counter={{ atual: feitos, alvo: habit.frequency }}
       progress={(feitos / habit.frequency) * 100}
     >
@@ -705,7 +721,9 @@ function WeekHabitCard({
           const feito = doneDays.has(dia);
           const ehHoje = dia === todayStr;
           const futuro = dia > todayStr;
-          // janela rolante: o rótulo vem do dia da semana da data, não do índice
+          // O rótulo sai do dia da semana da data, não do índice. Agora que a
+          // faixa é fixa os dois coincidem, mas derivar da data mantém a
+          // legenda certa mesmo se a origem da semana mudar de novo.
           const dow = new Date(`${dia}T12:00:00`).getDay();
           const preferencial = habit.preferredDays.includes(dow);
           return (
@@ -715,7 +733,9 @@ function WeekHabitCard({
               onClick={() => onToggleDay(dia)}
               title={
                 `${DAY_LABELS[dow]}${preferencial ? ' · dia preferencial' : ''}` +
-                ` — clique para marcar`
+                // Dia que ainda não chegou não se marca, então prometer o
+                // clique num botão desabilitado só confunde.
+                (futuro ? '' : ' — clique para marcar')
               }
               className="flex flex-1 flex-col items-center gap-1.5 disabled:opacity-30"
             >
