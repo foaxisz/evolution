@@ -677,7 +677,10 @@ export function getAjustesDeFoco(): AjustesDeFoco {
       : padrao;
 
   return {
-    minutosFoco: limitar(guardado.minutosFoco, AJUSTES_PADRAO.minutosFoco, 1, 180),
+    // 12h de teto: alto o bastante para acompanhar um dia inteiro de
+    // trabalho, e não só um bloco. O piso de 1 continua — bloco de 0 minuto
+    // termina no mesmo instante em que começa e trava o ciclo.
+    minutosFoco: limitar(guardado.minutosFoco, AJUSTES_PADRAO.minutosFoco, 1, 720),
     minutosPausa: limitar(guardado.minutosPausa, AJUSTES_PADRAO.minutosPausa, 1, 60),
     minutosPausaLonga: limitar(guardado.minutosPausaLonga, AJUSTES_PADRAO.minutosPausaLonga, 1, 90),
     blocosAteAPausaLonga: limitar(guardado.blocosAteAPausaLonga, AJUSTES_PADRAO.blocosAteAPausaLonga, 2, 12),

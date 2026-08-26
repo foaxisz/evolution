@@ -1245,7 +1245,10 @@ function AjustesModal({
   useEffect(() => { if (aberto) setRascunho(ajustes); }, [aberto, ajustes]);
 
   const campos: { chave: keyof AjustesDeFoco; rotulo: string; min: number; max: number }[] = [
-    { chave: 'minutosFoco', rotulo: 'Bloco de foco (min)', min: 1, max: 180 },
+    // Precisa bater com o `limitar` de `getAjustesDeFoco`: são duas travas
+    // de propósito (o `max` do campo não segura o que é digitado à mão), e
+    // divergirem faria o valor salvo ser silenciosamente puxado de volta.
+    { chave: 'minutosFoco', rotulo: 'Bloco de foco (min)', min: 1, max: 720 },
     { chave: 'minutosPausa', rotulo: 'Pausa curta (min)', min: 1, max: 60 },
     { chave: 'minutosPausaLonga', rotulo: 'Pausa longa (min)', min: 1, max: 90 },
     { chave: 'blocosAteAPausaLonga', rotulo: 'Blocos até a pausa longa', min: 2, max: 12 },
