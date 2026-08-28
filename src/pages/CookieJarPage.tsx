@@ -169,10 +169,13 @@ export default function CookieJarPage() {
             </div>
             <h1 className="text-2xl font-bold text-text-primary">Pote de Biscoitos</h1>
           </div>
-          {/* O pote não é diário de gratidão: é a prova do que você já
-              aguentou, para consultar quando bater a dúvida. */}
+          {/* O pote guarda o que vale relembrar: tanto o que custou e você
+              fez assim mesmo, quanto o dia em que algo deu certo. Os dois
+              servem para a mesma coisa — consultar quando bater a dúvida.
+              A frase dizia só "coisas difíceis que você já superou", e isso
+              deixava metade do pote de fora. */}
           <p className="text-sm text-text-secondary">
-            Coisas difíceis que você já superou. Quando bater a dúvida, enfie a mão aqui.
+            Quando bater a dúvida, enfie a mão aqui.
           </p>
         </div>
 
@@ -205,7 +208,7 @@ export default function CookieJarPage() {
           value={description}
           onChange={e => setDescription(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="O que foi difícil e você fez mesmo assim?"
+          placeholder="O que aconteceu que vale guardar?"
           rows={3}
           className="entrada resize-none"
         />
@@ -297,7 +300,7 @@ export default function CookieJarPage() {
         <EmptyState
           icon={<Cookie size={26} />}
           message="Pote vazio"
-          subtitle="Guarde a primeira: algo que custou e você fez assim mesmo."
+          subtitle="Guarde a primeira: algo que vale relembrar depois."
         />
       )}
 
@@ -366,7 +369,7 @@ export default function CookieJarPage() {
       <Modal
         isOpen={!!sorteado}
         onClose={() => setSorteado(null)}
-        title="Você já passou por isso"
+        title="Você viveu isto"
         maxWidth="max-w-lg"
         rodape={
           <div className="flex gap-3">
