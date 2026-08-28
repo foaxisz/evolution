@@ -367,9 +367,36 @@ function EspacoDaFrente({
   // A cabine é estado salvo, não só de tela: fechar o app em tela cheia e
   // reabrir tem que devolver a tela cheia, com o mesmo bloco correndo.
   const [cabineAberta, definirCabine] = useState(() => getCabineAberta() && !!getFocoEmAndamento());
+  /*
+   * Escudo contra o clique que atravessa a cabine ao fechar.
+   *
+   * Fechar a tela cheia tira uma tela inteira da frente da página num
+   * instante. Num toque, o clique que o navegador SINTETIZA depois do dedo
+   * levantar chega quando a cabine já saiu — e acerta o que ficou embaixo.
+   * Na lista de tarefas, o que fica embaixo é um checkbox.
+   *
+   * É a explicação mais provável para "encerrar bloco concluiu a tarefa".
+   * Não consegui reproduzir: o alinhamento depende de rolagem, tamanho de
+   * tela e de quantas tarefas há na lista, e nas configurações que testei o
+   * ponto do Encerrar caía em texto, não em botão. Mas o caminho do
+   * `parar()` não encosta em `toggleAction`, então o clique atravessado é o
+   * único mecanismo que explica o relato — e vale fechá-lo inteiro em vez
+   * de perseguir a combinação exata que o produz.
+   *
+   * Isto não é remendo cego: a janela existe de verdade em qualquer
+   * sobreposição que some no clique, e continuaria existindo mesmo que a
+   * causa fosse outra.
+   */
+  const [escudo, setEscudo] = useState(false);
+
   const abrirCabine = useCallback((aberta: boolean) => {
     definirCabine(aberta);
     setCabineAberta(aberta);
+    if (aberta) return;
+    setEscudo(true);
+    // 350ms cobre o clique fantasma do toque, que chega em ~300ms, sem
+    // segurar um segundo clique deliberado por tempo perceptível.
+    window.setTimeout(() => setEscudo(false), 350);
   }, []);
 
   // Só força o repintar. Os números saem de Date.now() a cada render — o
@@ -649,6 +676,16 @@ function EspacoDaFrente({
         onPausar={pausar}
         onRetomar={retomar}
       />
+
+      {/* Vidro invisível por 350ms depois que a cabine fecha. Come o clique
+          fantasma que viria atrás dela e nada mais — some sozinho. */}
+      {escudo && (
+        <div
+          className="fixed inset-0 z-[100]"
+          aria-hidden
+          onClick={e => { e.preventDefault(); e.stopPropagation(); setEscudo(false); }}
+        />
+      )}
 
       <TelaCheiaDeFoco
         aberta={cabineAberta}
