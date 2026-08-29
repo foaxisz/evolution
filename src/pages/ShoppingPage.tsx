@@ -422,7 +422,12 @@ export default function ShoppingPage() {
       {/* Filtros */}
       <div className="mb-5">
         <FitaDeCategorias
-          ativo={filtro}
+          // Apagar a última categoria faz o segmento "Sem categoria"
+          // desaparecer, e o filtro ficaria apontando para um segmento que
+          // não existe mais — a fita apareceria sem nada selecionado. Sem
+          // categoria nenhuma os dois mostram a mesma lista, então "Todas"
+          // assume sem trocar o que está na tela.
+          ativo={filtro === SEM_CATEGORIA && categorias.length === 0 ? 'todas' : filtro}
           onEscolher={setFiltro}
           onNova={() => setGerenciarAberto(true)}
           segmentos={[
@@ -430,8 +435,16 @@ export default function ShoppingPage() {
             ...categorias.map(c => ({
               chave: c.id, rotulo: c.name, cor: c.color, icone: c.icon, contagem: contarEm(c.id),
             })),
-            // "Sem categoria" só existe quando existe item sem categoria.
-            ...(pendentes.some(i => !i.categoryId)
+            /*
+             * "Sem categoria" exige DUAS condições, e a segunda é a que
+             * faltava: precisa existir alguma categoria.
+             *
+             * Sem nenhuma criada, todo item é sem categoria — o segmento
+             * mostraria exatamente o mesmo que "Todas", com o mesmo número
+             * ao lado. Um segmento que só repete o vizinho ocupa espaço para
+             * não dizer nada.
+             */
+            ...(categorias.length > 0 && pendentes.some(i => !i.categoryId)
               ? [{ chave: SEM_CATEGORIA, rotulo: 'Sem categoria', contagem: contarEm(SEM_CATEGORIA) }]
               : []),
             /*
