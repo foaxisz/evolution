@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ShoppingBag, Plus, Trash2, Pencil, ExternalLink, Check,
-  ImagePlus, X, AlertTriangle, Ban,
-} from 'lucide-react';
+  ImagePlus, X, AlertTriangle, } from 'lucide-react';
 import { startOfMonth, startOfYear, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -22,6 +21,7 @@ import Toast from '../components/ui/Toast';
 import EmptyState from '../components/ui/EmptyState';
 import TrilhaDeMarcos from '../components/compras/TrilhaDeMarcos';
 import FitaDeCategorias from '../components/compras/FitaDeCategorias';
+import { MARCOS, faltamPara } from '../lib/marcos';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import HabitIcon, { HABIT_ICONS, HABIT_ICON_KEYS } from '../components/ui/HabitIcon';
 import { reduzirImagem, formatarBytes } from '../lib/imagem';
@@ -35,10 +35,6 @@ const CONQUISTADOS = '__conquistados__';
 const MS_CARIMBO = 380;
 const MS_SAIDA = 260;
 
-/** Teto de blocos da barra. Abaixo disso cada bloco é literalmente um item
- *  da lista — o que torna o "3 de 8" legível sem ler o número. */
-const MAX_BLOCOS = 24;
-
 type Periodo = 'mes' | 'ano' | 'tudo';
 
 const PERIODOS: { chave: Periodo; rotulo: string }[] = [
@@ -50,26 +46,6 @@ const PERIODOS: { chave: Periodo; rotulo: string }[] = [
 function moeda(v?: number): string {
   if (v === undefined || Number.isNaN(v)) return '';
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-/** Percentual honesto: só chega a 100 quando fecha de verdade, e nunca
- *  arredonda um começo real para 0. */
-function pctConquistado(conquistados: number, total: number): number {
-  if (total === 0 || conquistados === 0) return 0;
-  if (conquistados >= total) return 100;
-  return Math.min(99, Math.max(1, Math.round((conquistados / total) * 100)));
-}
-
-/** Frase da barra. Uma linha curta por faixa — a intenção é dar sentido ao
- *  número, não motivar com frase de para-choque. */
-function frase(pct: number, total: number, conquistados: number): string {
-  if (conquistados === 0) return `Sua lista está montada. ${total === 1 ? 'Falta o primeiro passo.' : 'Falta dar o primeiro passo.'}`;
-  if (pct >= 100) return 'Lista inteira conquistada.';
-  if (pct >= 75) return 'Falta pouco para fechar a lista.';
-  if (pct > 50) return 'Mais da metade da sua lista virou realidade.';
-  if (pct === 50) return 'Metade da lista já virou realidade.';
-  if (pct >= 25) return 'Bom pedaço do caminho já é seu.';
-  return 'O começo já saiu do papel.';
 }
 
 /** Quando o item foi conquistado. Itens antigos podem não ter `completedAt`
@@ -158,13 +134,26 @@ export default function ShoppingPage() {
       // Lê do armazenamento, não do estado: o setItens acima ainda não
       // chegou nesta closure.
       const frescos = getShoppingItems();
-      const pct = pctConquistado(frescos.filter(i => i.completed).length, frescos.length);
+      const n = frescos.filter(i => i.completed).length;
+
+      /*
+       * O aviso dizia "50% da lista", e carregava o mesmo defeito da barra
+       * antiga: a fração encolhe quando um desejo novo entra. Agora ele fala
+       * a língua da trilha — e o momento de bater um marco é justamente
+       * quando vale dizer isso em voz alta.
+       */
+      const faltam = faltamPara(n);
+      const bateuMarco = MARCOS.includes(n as (typeof MARCOS)[number]);
+      const progresso =
+        bateuMarco ? `marco de ${n} alcançado`
+        : faltam !== null ? `${faltam === 1 ? 'falta 1' : `faltam ${faltam}`} para o próximo marco`
+        : `${n} conquistados`;
 
       setAviso({
         chave: Date.now(),
         itemId: item.id,
         mensagem: `${item.name} conquistado`,
-        detalhe: [item.price ? moeda(item.price) : null, `${pct}% da lista`]
+        detalhe: [item.price ? moeda(item.price) : null, progresso]
           .filter(Boolean).join(' · '),
         desfazivel: true,
       });
@@ -793,13 +782,19 @@ function Campo({ rotulo, obrigatorio, children }: { rotulo: string; obrigatorio?
   );
 }
 
-/** Chip de filtro. Editar/excluir ficam na tela de gerenciar categorias —
- *  ícones aparecendo no hover empurravam o layout e piscavam. */
+/**
+ * O chip de "Conquistados".
+ *
+ * Sobrou sozinho depois que as categorias viraram fita: ele não é uma
+ * categoria, é um MODO DE VER a mesma lista, e dentro da fita pareceria só
+ * mais uma prateleira. Fica de fora, com o desenho arredondado de antes, que
+ * é justamente o que o separa dos segmentos.
+ */
 function Chip({
-  ativo, onClick, rotulo, contagem, cor, icone, prefixo,
+  ativo, onClick, rotulo, contagem, cor, prefixo,
 }: {
   ativo: boolean; onClick: () => void; rotulo: string; contagem: number;
-  cor?: string; icone?: string; prefixo?: React.ReactNode;
+  cor?: string; prefixo?: React.ReactNode;
 }) {
   const c = cor ?? 'var(--color-accent)';
   return (
@@ -812,92 +807,8 @@ function Chip({
       }}
     >
       {prefixo && <span style={{ color: ativo ? c : 'var(--color-text-muted)' }}>{prefixo}</span>}
-      {icone && <HabitIcon name={icone} size={13} color={ativo ? c : 'var(--color-text-muted)'} />}
       <span className={ativo ? 'font-medium text-text-primary' : 'text-text-secondary'}>{rotulo}</span>
       <span className="text-xs text-text-muted">{contagem}</span>
-    </button>
-  );
-}
-
-/**
- * Barra de evolução da lista. Até MAX_BLOCOS itens cada bloco é um item —
- * dez itens viram dez blocos, e um comprado acende exatamente um. Acima
- * disso os blocos passam a ser proporcionais.
- */
-function BarraEvolucao({
-  conquistados, total, escopoRotulo,
-}: {
-  conquistados: number; total: number; escopoRotulo?: string;
-}) {
-  if (total === 0) return null;
-
-  const pct = pctConquistado(conquistados, total);
-  const blocos = Math.min(total, MAX_BLOCOS);
-
-  let acesos = Math.round((conquistados / total) * blocos);
-  if (conquistados > 0) acesos = Math.max(1, acesos);          // começou, acende
-  if (conquistados < total) acesos = Math.min(blocos - 1, acesos); // não fechou, sobra
-  if (conquistados >= total) acesos = blocos;
-
-  return (
-    <div className="border-t border-border p-4">
-      <div className="mb-2.5 flex items-baseline justify-between gap-3">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-          Rumo à sua melhor versão
-        </p>
-        <p className="flex-shrink-0 font-arcade text-[11px] leading-none text-accent-light">{pct}%</p>
-      </div>
-
-      <div className="flex gap-[3px]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-        {Array.from({ length: blocos }, (_, i) => {
-          const aceso = i < acesos;
-          // Degradê ao longo dos acesos: a ponta é a mais clara, o que dá
-          // a leitura de avanço sem precisar animar nada.
-          const t = acesos > 1 ? i / (acesos - 1) : 1;
-          return (
-            <span
-              key={i}
-              className="h-2.5 flex-1 rounded-[2px] transition-colors duration-300"
-              style={{
-                backgroundColor: aceso
-                  ? `color-mix(in oklab, var(--color-accent-light) ${Math.round(t * 100)}%, var(--color-accent-dim))`
-                  : 'var(--color-bg-input)',
-                boxShadow: aceso
-                  ? '0 0 6px color-mix(in oklab, var(--color-accent) 45%, transparent)'
-                  : 'inset 0 0 0 1px var(--color-border)',
-              }}
-            />
-          );
-        })}
-      </div>
-
-      <p className="mt-2.5 text-xs text-text-secondary">
-        <span className="tabular-nums text-text-primary">{conquistados} de {total}</span>
-        {escopoRotulo ? ` em ${escopoRotulo}` : total === 1 ? ' conquistado' : ' conquistados'} · {frase(pct, total, conquistados)}
-      </p>
-    </div>
-  );
-}
-
-/** Chip de seleção do formulário — mesmo visual do filtro, sem contagem. */
-function ChipCat({
-  ativo, onClick, rotulo, cor, prefixo,
-}: {
-  ativo: boolean; onClick: () => void; rotulo: string; cor?: string; prefixo?: React.ReactNode;
-}) {
-  const c = cor ?? 'var(--color-accent)';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-[background-color,border-color] duration-200"
-      style={{
-        backgroundColor: ativo ? `color-mix(in oklab, ${c} 18%, transparent)` : 'var(--color-bg-input)',
-        borderColor: ativo ? c : 'var(--color-border)',
-      }}
-    >
-      {prefixo && <span style={{ color: ativo ? c : 'var(--color-text-muted)' }}>{prefixo}</span>}
-      <span className={ativo ? 'font-medium text-text-primary' : 'text-text-secondary'}>{rotulo}</span>
     </button>
   );
 }
