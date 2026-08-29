@@ -1,5 +1,6 @@
 import {
   faixaDePreco, totalDaLista, faixaExata, progressoGuardado, faltaGuardar,
+  porMes, recordes,
 } from '../src/lib/compras.ts';
 
 /**
@@ -76,6 +77,71 @@ ok('parcial', faltaGuardar(456, 1200), 744);
 ok('completo não falta nada', faltaGuardar(1200, 1200), 0);
 ok('guardar a mais não vira crédito', faltaGuardar(2000, 1200), 0);
 ok('sem preço não falta nada a juntar', faltaGuardar(100, undefined), 0);
+
+console.log('\nConquistas mês a mês:');
+{
+  const HOJE = '2026-08-15';
+  const item = (name, mes, price, completed = true) =>
+    ({ name, price, completed, completedAt: mes ? mes + 'T12:00:00.000Z' : undefined, createdAt: '2026-01-01T12:00:00.000Z' });
+
+  const linha = porMes([
+    item('a', '2026-08-02', 100),
+    item('b', '2026-08-20', 200),
+    item('c', '2026-06-10', 300),
+    item('pendente', null, 999, false),
+  ], HOJE, 4);
+
+  ok('devolve exatamente a janela pedida', linha.length, 4);
+  ok('termina no mês de hoje', linha[linha.length-1].mes, '2026-08');
+  ok('começa no mês certo', linha[0].mes, '2026-05');
+  ok('meses VAZIOS aparecem — pular faria as barras mentirem sobre o ritmo',
+    linha.map(m => m.mes), ['2026-05','2026-06','2026-07','2026-08']);
+  ok('agrupa por mês', linha.map(m => m.quantidade), [0, 1, 0, 2]);
+  ok('soma o valor de cada mês', linha.map(m => m.valor), [0, 300, 0, 300]);
+  ok('pendente não conta', porMes([item('p', null, 500, false)], HOJE, 3)
+    .reduce((n,m)=>n+m.quantidade,0), 0);
+  ok('conquista fora da janela fica de fora',
+    porMes([item('velho', '2020-01-05', 100)], HOJE, 3).reduce((n,m)=>n+m.quantidade,0), 0);
+  ok('sem data nenhuma não inventa mês',
+    porMes([{ name:'x', price:10, completed:true }], HOJE, 3).reduce((n,m)=>n+m.quantidade,0), 0);
+  ok('vira o ano para trás', porMes([], '2026-02-10', 4).map(m=>m.mes),
+    ['2025-11','2025-12','2026-01','2026-02']);
+  ok('lista vazia devolve a janela zerada',
+    porMes([], HOJE, 3).map(m=>m.quantidade), [0,0,0]);
+}
+
+console.log('\nRecordes:');
+{
+  const HOJE = '2026-08-15';
+  const itens = [
+    { name:'Câmera', price:2300, completed:true, completedAt:'2026-07-01T12:00:00.000Z', createdAt:'2026-01-01T12:00:00.000Z' },
+    { name:'Fone', price:300, completed:true, completedAt:'2026-07-20T12:00:00.000Z', createdAt:'2026-01-01T12:00:00.000Z' },
+    { name:'Teclado', price:450, completed:true, completedAt:'2026-05-02T12:00:00.000Z', createdAt:'2026-01-01T12:00:00.000Z' },
+    { name:'Cadeira', price:1200, completed:false, createdAt:'2026-06-16T12:00:00.000Z' },
+    { name:'Tênis', price:450, completed:false, createdAt:'2026-08-10T12:00:00.000Z' },
+  ];
+  const r = recordes(itens, HOJE);
+  ok('o mais caro CONQUISTADO', r.maisCaro, { nome:'Câmera', valor:2300 });
+  ok('pendente caro não conta como recorde',
+    recordes([{ name:'caro', price:9999, completed:false, createdAt:'2026-01-01T12:00:00.000Z' }], HOJE).maisCaro, null);
+  ok('o mês de mais conquistas', r.melhorMes, { mes:'2026-07', quantidade:2 });
+  ok('quem espera há mais tempo', r.esperaMaisLonga, { nome:'Cadeira', dias:60 });
+
+  const vazio = recordes([], HOJE);
+  ok('lista vazia não inventa recorde',
+    [vazio.maisCaro, vazio.melhorMes, vazio.esperaMaisLonga], [null, null, null]);
+  ok('conquistado sem preço não vira "mais caro"',
+    recordes([{ name:'x', completed:true, completedAt:'2026-07-01T12:00:00.000Z' }], HOJE).maisCaro, null);
+  ok('mas ainda conta para o mês',
+    recordes([{ name:'x', completed:true, completedAt:'2026-07-01T12:00:00.000Z' }], HOJE).melhorMes,
+    { mes:'2026-07', quantidade:1 });
+  ok('item criado hoje espera zero dias',
+    recordes([{ name:'novo', completed:false, createdAt:'2026-08-15T12:00:00.000Z' }], HOJE).esperaMaisLonga,
+    { nome:'novo', dias:0 });
+  ok('data futura não vira espera negativa',
+    recordes([{ name:'futuro', completed:false, createdAt:'2027-01-01T12:00:00.000Z' }], HOJE).esperaMaisLonga,
+    { nome:'futuro', dias:0 });
+}
 
 console.log(falhas === 0 ? '\nTodos passaram.' : `\n${falhas} falha(s).`);
 process.exit(falhas === 0 ? 0 : 1);

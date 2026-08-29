@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ShoppingBag, Plus, Trash2, Pencil, ExternalLink, Check,
-  ImagePlus, X, AlertTriangle, Crosshair,
+  ImagePlus, X, AlertTriangle, Crosshair, ChartNoAxesColumn,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -26,6 +26,7 @@ import TrilhaDeMarcos from '../components/compras/TrilhaDeMarcos';
 import FitaDeCategorias from '../components/compras/FitaDeCategorias';
 import FaixaDeLegenda from '../components/compras/FaixaDeLegenda';
 import DetalheDoProximo from '../components/compras/DetalheDoProximo';
+import RelatorioDeCompras from '../components/compras/RelatorioDeCompras';
 import { totalDaLista } from '../lib/compras';
 import { MARCOS, faltamPara } from '../lib/marcos';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -109,6 +110,7 @@ export default function ShoppingPage() {
   const [form, setForm] = useState<FormItem>(FORM_VAZIO);
   const [catAberta, setCatAberta] = useState(false);
   const [gerenciarAberto, setGerenciarAberto] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   /** itens com o carimbo na tela */
   const [marcando, setMarcando] = useState<Set<string>>(new Set());
   /** itens encolhendo para fora da grade — ficam no DOM até a animação acabar */
@@ -365,6 +367,19 @@ export default function ShoppingPage() {
           {/* Só o "+", num círculo de roxo calmo. O gradiente forte do
               `btn-grad` puxava o olho para o canto superior direito antes de
               qualquer coisa da lista — e a lista é o assunto da tela. */}
+          <button
+            onClick={() => setRelatorioAberto(true)}
+            aria-label="Relatório"
+            title="Relatório"
+            className="flex h-10 w-10 items-center justify-center rounded-full border-solid transition-colors duration-200"
+            style={{
+              borderWidth: 1,
+              borderColor: 'var(--color-border)',
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            <ChartNoAxesColumn size={16} />
+          </button>
           <button
             onClick={abrirNovo}
             aria-label="Novo item"
@@ -663,21 +678,45 @@ export default function ShoppingPage() {
       </Modal>
 
       {/* ── Gerenciar categorias ── */}
+      <RelatorioDeCompras
+        aberto={relatorioAberto}
+        itens={itens}
+        hoje={new Date().toISOString().slice(0, 10)}
+        onFechar={() => setRelatorioAberto(false)}
+      />
+
       <Modal isOpen={gerenciarAberto} onClose={() => setGerenciarAberto(false)} title="Categorias" maxWidth="max-w-md">
-        <div className="space-y-2">
+        {/* Lê como gerenciador de CAMADAS, que é o que a fita virou: o
+            quadradinho da cor, o nome em micro-caixa-alta e a contagem. Era
+            uma lista de pílulas `rounded-xl` de texto normal, na linguagem
+            antiga do app — destoava da aba inteira. */}
+        <div className="space-y-1.5">
           {categorias.length === 0 && (
-            <p className="py-4 text-center text-sm text-text-muted">Nenhuma categoria ainda.</p>
+            <p className="py-3 text-xs leading-relaxed text-text-muted">
+              Nenhuma categoria ainda. Elas agrupam os itens da lista e viram
+              camadas na barra de cima, que você liga e desliga para filtrar.
+            </p>
           )}
           {categorias.map(c => (
-            <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg-input p-3">
+            <div
+              key={c.id}
+              className="flex items-center gap-3 rounded-md border-solid px-3 py-2.5"
+              style={{ borderWidth: 1, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-input)' }}
+            >
               <span
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
-                style={{ backgroundColor: `color-mix(in oklab, ${c.color ?? CORES[0]} 20%, transparent)` }}
-              >
-                <HabitIcon name={c.icon} size={14} color={c.color} />
+                className="h-[9px] w-[9px] flex-shrink-0 rounded-[1px] border"
+                style={{
+                  backgroundColor: c.color ?? CORES[0],
+                  borderColor: c.color ?? CORES[0],
+                  boxShadow: `0 0 5px ${c.color ?? CORES[0]}`,
+                }}
+                aria-hidden
+              />
+              <HabitIcon name={c.icon} size={13} color={c.color} />
+              <span className="font-arcade min-w-0 flex-1 truncate text-[0.5rem] uppercase leading-none text-text-primary">
+                {c.name}
               </span>
-              <span className="flex-1 truncate text-sm text-text-primary">{c.name}</span>
-              <span className="text-xs text-text-muted">{contarEm(c.id)}</span>
+              <span className="font-arcade text-[0.55rem] leading-none text-text-muted">{contarEm(c.id)}</span>
               <button
                 onClick={() => { setCatForm({ id: c.id, name: c.name, icon: c.icon ?? 'target', color: c.color ?? CORES[0] }); setCatAberta(true); }}
                 className="rounded-lg p-1.5 text-text-muted transition-colors hover:text-accent-light"
@@ -696,9 +735,15 @@ export default function ShoppingPage() {
           ))}
           <button
             onClick={() => { setCatForm({ id: '', name: '', icon: 'target', color: CORES[0] }); setCatAberta(true); }}
-            className="btn-grad mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white"
+            className="font-arcade mt-3 flex w-full items-center justify-center gap-2 rounded-md border-solid py-3 text-[0.5rem] uppercase leading-none transition-colors duration-200"
+            style={{
+              borderWidth: 1,
+              borderColor: 'color-mix(in oklab, var(--color-accent) 40%, transparent)',
+              backgroundColor: 'color-mix(in oklab, var(--color-accent) 12%, transparent)',
+              color: 'var(--color-accent-light)',
+            }}
           >
-            <Plus size={16} />
+            <Plus size={13} />
             Nova categoria
           </button>
         </div>
