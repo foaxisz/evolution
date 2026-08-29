@@ -1,83 +1,106 @@
 import { Fragment } from 'react';
-import { trilha, faltamPara } from '../../lib/marcos';
+import { trilha, faltamPara, MARCOS } from '../../lib/marcos';
 
 /**
- * A trilha de marcos da aba Compras.
+ * A trilha de marcos, desenhada como COTA de desenho técnico.
  *
- * Recebe SÓ quantos itens foram conquistados — nunca o total da lista. É a
- * assinatura que corrige o defeito da barra anterior, que dividia pelo total
- * e por isso andava para trás quando um desejo novo entrava na lista.
+ * A lógica não mudou uma linha — `lib/marcos.ts` e seus 23 testes seguem
+ * intactos. Mudou só o desenho: pinos quadrados e linha grossa viraram traços
+ * perpendiculares sobre uma linha fina, com uma seta na posição atual. É a
+ * diferença entre "barra de progresso estilizada" e instrumento de medida, e
+ * é o que a faz pertencer à prancha.
  *
- * Tudo em flexbox, sem posicionamento absoluto: os pinos e os trechos se
- * alinham pela linha de base do contêiner. Uma versão anterior deste desenho
- * usava `absolute` com `left: %` e quebrava quando a caixa mudava de largura.
+ * A regra que importa continua sendo a da assinatura: recebe só quantos itens
+ * foram conquistados, nunca o total da lista. Foi o total que fazia a barra
+ * anterior andar para trás quando um desejo novo entrava.
  */
 export default function TrilhaDeMarcos({ conquistados }: { conquistados: number }) {
   const pontos = trilha(conquistados);
   const faltam = faltamPara(conquistados);
 
-  return (
-    <div className="border-t border-border p-4">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-          Rumo à sua melhor versão
-        </p>
-        <p className="font-arcade flex-shrink-0 text-[11px] leading-none text-accent-light">
-          {conquistados}
-        </p>
-      </div>
+  /*
+   * Onde a seta pousa, em porcentagem da largura.
+   *
+   * Os traços são igualmente espaçados na tela (cada trecho é `flex-1`),
+   * então a posição não sai do NÚMERO conquistado — sai de quantos trechos
+   * já foram andados mais o quanto do atual está preenchido. Interpolar pelo
+   * número colocaria a seta longe do traço correspondente, porque o vão de 25
+   * a 50 é doze vezes maior que o de 1 a 3 e ocupa o mesmo espaço.
+   */
+  const ultimoAceso = pontos.filter(p => p.aceso).length;
+  const emAndamento = pontos[ultimoAceso]?.preenchimento ?? 0;
+  const passo = 100 / (MARCOS.length - 1);
+  const posicao = Math.min(100, Math.max(0, (ultimoAceso - 1 + emAndamento) * passo));
 
-      {/* `items-end`: os pinos têm o número em cima, então alinhar pelo topo
-          desencontraria as alturas. Pelo pé, todos assentam na mesma linha. */}
-      <div className="flex items-end" role="img" aria-label={`${conquistados} conquistados`}>
+  return (
+    <div className="relative mb-5 px-1 pt-4">
+      {conquistados > 0 && (
+        <span
+          className="font-arcade pointer-events-none absolute top-0 whitespace-nowrap text-[6px] leading-none"
+          style={{
+            left: `${posicao}%`,
+            // Acima de 85% a etiqueta sairia pela direita, então ela vira e
+            // se ancora pelo fim em vez do começo.
+            transform: posicao > 85 ? 'translateX(-100%)' : 'translateX(-4px)',
+            color: 'var(--color-accent)',
+          }}
+        >
+          ▼ VOCÊ
+        </span>
+      )}
+
+      <div className="flex items-center" role="img" aria-label={`${conquistados} conquistados`}>
         {pontos.map((p, i) => (
           <Fragment key={p.marco}>
-            {/* O trecho que CHEGA a este marco. Não existe antes do primeiro
-                pino — ali a trilha começa, não vem de lugar nenhum. */}
             {i > 0 && (
-              <div className="mb-[4.5px] h-[3px] flex-1 overflow-hidden rounded-full bg-bg-input">
-                <div
-                  className="h-full rounded-full transition-[width] duration-500"
+              <span className="h-px flex-1" style={{ backgroundColor: 'var(--color-border-light)' }}>
+                <span
+                  className="block h-full transition-[width] duration-500"
                   style={{
                     width: `${p.preenchimento * 100}%`,
                     backgroundColor: 'var(--color-accent)',
                     boxShadow: p.preenchimento > 0
-                      ? '0 0 5px color-mix(in oklab, var(--color-accent) 40%, transparent)'
+                      ? '0 0 6px color-mix(in oklab, var(--color-accent) 55%, transparent)'
                       : undefined,
                   }}
                 />
-              </div>
-            )}
-
-            <div className="flex flex-col items-center gap-1.5">
-              <span
-                className="font-arcade text-[8px] leading-none transition-colors duration-300"
-                style={{ color: p.aceso ? 'var(--color-accent-light)' : 'var(--color-text-muted)' }}
-              >
-                {p.marco}
               </span>
-              {/* Quadrado de canto 2px, nunca círculo — é a mesma casa do
-                  calendário e da bandeira de prioridade. O brilho é curto:
-                  são seis pinos lado a lado, e halo largo repetido seis vezes
-                  vira borrão, como já aconteceu nas prioridades. */}
-              <span
-                className="h-3 w-3 flex-shrink-0 rounded-[3px] border-2 transition-colors duration-300"
-                style={{
-                  backgroundColor: p.aceso ? 'var(--color-accent)' : 'var(--color-bg-primary)',
-                  borderColor: p.aceso ? 'var(--color-accent)' : 'var(--color-border-light)',
-                  boxShadow: p.aceso
-                    ? '0 0 5px color-mix(in oklab, var(--color-accent) 45%, transparent)'
-                    : undefined,
-                }}
-              />
-            </div>
+            )}
+            {/* Traço perpendicular, como a marca de uma régua. */}
+            <span
+              className="h-[9px] w-px flex-shrink-0 transition-colors duration-300"
+              style={{
+                backgroundColor: p.aceso ? 'var(--color-accent)' : 'var(--color-border-light)',
+                boxShadow: p.aceso
+                  ? '0 0 6px color-mix(in oklab, var(--color-accent) 60%, transparent)'
+                  : undefined,
+              }}
+            />
           </Fragment>
         ))}
       </div>
 
-      <p className="mt-3 text-xs text-text-secondary">
-        <span className="tabular-nums text-text-primary">
-          {conquistados} {conquistados === 1 ? 'conquistado' : 'conquistados'}
+      <div className="mt-2 flex">
+        {pontos.map((p, i) => (
+          <span
+            key={p.marco}
+            className="font-arcade text-[6.5px] leading-none transition-colors duration-300"
+            style={{
+              color: p.aceso ? 'var(--color-accent-light)' : 'var(--color-text-muted)',
+              // Primeiro e último ancoram nas pontas; os do meio se centram no
+              // próprio trecho, para cair sob o traço a que pertencem.
+              flex: i === 0 || i === pontos.length - 1 ? '0 0 auto' : '1',
+              textAlign: i === 0 ? 'left' : i === pontos.length - 1 ? 'right' : 'center',
+            }}
+          >
+            {p.marco}
+          </span>
+        ))}
+      </div>
+
+      <p className="mt-2.5 text-[11px] text-text-muted">
+        <span className="tabular-nums text-text-secondary">
+          {conquistados} {conquistados === 1 ? 'executado' : 'executados'}
         </span>
         {faltam !== null && ` · ${faltam === 1 ? 'falta 1' : `faltam ${faltam}`} para o próximo marco`}
       </p>

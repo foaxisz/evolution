@@ -30,12 +30,21 @@ export interface SegmentoDeCategoria {
  * a barra e impediria a rolagem ao mesmo tempo — a fita ficaria cortada.
  */
 export default function FitaDeCategorias({
-  segmentos, ativo, onEscolher,
+  segmentos, ativo, onEscolher, onNova,
 }: {
   segmentos: SegmentoDeCategoria[];
   /** `chave` do segmento selecionado. */
   ativo: string;
   onEscolher: (chave: string) => void;
+  /**
+   * Ausente = sem o segmento "+".
+   *
+   * Ele abre o modal de categorias INTEIRO — criar, renomear e excluir —,
+   * herdando a função do botão "Categorias" que saía do cabeçalho. Só criar
+   * deixaria o usuário sem como editar, e um caminho por clique direito não
+   * existiria no celular.
+   */
+  onNova?: () => void;
 }) {
   if (segmentos.length === 0) return null;
 
@@ -65,6 +74,18 @@ export default function FitaDeCategorias({
                 backgroundColor: on ? `color-mix(in oklab, ${cor} 16%, transparent)` : 'transparent',
               }}
             >
+              {/* Quadradinho de visibilidade, como camada de CAD — que é
+                  literalmente o que este filtro faz: liga e desliga o que
+                  aparece no desenho. */}
+              <span
+                className="h-[7px] w-[7px] flex-shrink-0 rounded-[1px] border transition-colors duration-200"
+                style={{
+                  backgroundColor: on ? cor : 'transparent',
+                  borderColor: on ? cor : 'var(--color-border-light)',
+                  boxShadow: on ? `0 0 5px ${cor}` : undefined,
+                }}
+                aria-hidden
+              />
               {s.icone && (
                 <HabitIcon name={s.icone} size={12} color={on ? cor : 'var(--color-text-muted)'} />
               )}
@@ -85,6 +106,22 @@ export default function FitaDeCategorias({
             </button>
           );
         })}
+
+        {onNova && (
+          <button
+            type="button"
+            onClick={onNova}
+            aria-label="Nova categoria"
+            title="Nova categoria"
+            className="font-arcade flex flex-shrink-0 items-center px-4 py-2.5 text-[9px] leading-none transition-colors duration-200"
+            style={{
+              borderLeft: '1px solid var(--color-border)',
+              color: 'var(--color-border-light)',
+            }}
+          >
+            +
+          </button>
+        )}
       </div>
     </div>
   );

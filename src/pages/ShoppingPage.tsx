@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ShoppingBag, Plus, Trash2, Pencil, ExternalLink, Check,
-  ImagePlus, X, AlertTriangle, } from 'lucide-react';
-import { startOfMonth, startOfYear, formatDistanceToNow } from 'date-fns';
+  ImagePlus, X, AlertTriangle, Crosshair,
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   getShoppingItems,
@@ -14,6 +15,8 @@ import {
   deleteShoppingItem,
   getUltimoErroDeGravacao,
   getUsoDoArmazenamento,
+  getProximoDeCompra,
+  setProximoDeCompra,
 } from '../store';
 import type { ShoppingItem, ShoppingCategory } from '../types';
 import Modal from '../components/ui/Modal';
@@ -21,6 +24,9 @@ import Toast from '../components/ui/Toast';
 import EmptyState from '../components/ui/EmptyState';
 import TrilhaDeMarcos from '../components/compras/TrilhaDeMarcos';
 import FitaDeCategorias from '../components/compras/FitaDeCategorias';
+import FaixaDeLegenda from '../components/compras/FaixaDeLegenda';
+import DetalheDoProximo from '../components/compras/DetalheDoProximo';
+import { totalDaLista } from '../lib/compras';
 import { MARCOS, faltamPara } from '../lib/marcos';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import HabitIcon, { HABIT_ICONS, HABIT_ICON_KEYS } from '../components/ui/HabitIcon';
@@ -35,17 +41,26 @@ const CONQUISTADOS = '__conquistados__';
 const MS_CARIMBO = 380;
 const MS_SAIDA = 260;
 
-type Periodo = 'mes' | 'ano' | 'tudo';
-
-const PERIODOS: { chave: Periodo; rotulo: string }[] = [
-  { chave: 'mes', rotulo: 'Mês' },
-  { chave: 'ano', rotulo: 'Ano' },
-  { chave: 'tudo', rotulo: 'Tudo' },
-];
 
 function moeda(v?: number): string {
   if (v === undefined || Number.isNaN(v)) return '';
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/**
+ * Campo de texto que vira número, ou nada.
+ *
+ * Devolve `undefined` para vazio e para lixo — e `undefined` é o valor
+ * legítimo de "sem isto": o `JSON.stringify` omite a chave, e o campo
+ * simplesmente não existe no item. Zero seria diferente e errado: uma
+ * tolerância de zero diz "o preço é exato", que não é o mesmo que "não
+ * informei tolerância".
+ */
+function numeroOuNada(bruto: string): number | undefined {
+  const t = bruto.trim();
+  if (!t) return undefined;
+  const n = Number(t.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 /** Quando o item foi conquistado. Itens antigos podem não ter `completedAt`
@@ -62,6 +77,8 @@ interface FormItem {
   name: string;
   categoryId: string;
   price: string;
+  tolerancia: string;
+  guardado: string;
   productUrl: string;
   imageData: string;
   imageUrl: string;
@@ -69,7 +86,8 @@ interface FormItem {
 }
 
 const FORM_VAZIO: FormItem = {
-  name: '', categoryId: '', price: '', productUrl: '', imageData: '', imageUrl: '', notes: '',
+  name: '', categoryId: '', price: '', tolerancia: '', guardado: '',
+  productUrl: '', imageData: '', imageUrl: '', notes: '',
 };
 
 interface Aviso {
@@ -84,8 +102,8 @@ export default function ShoppingPage() {
   const [itens, setItens] = useState<ShoppingItem[]>(() => getShoppingItems());
   const [categorias, setCategorias] = useState<ShoppingCategory[]>(() => getShoppingCategories());
   const [filtro, setFiltro] = useState<string>('todas');
-  const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [erro, setErro] = useState<string | null>(null);
+  const [proximoId, setProximoId] = useState<string | null>(() => getProximoDeCompra());
 
   const [formAberto, setFormAberto] = useState(false);
   const [form, setForm] = useState<FormItem>(FORM_VAZIO);
@@ -114,6 +132,7 @@ export default function ShoppingPage() {
     setItens(getShoppingItems());
     setCategorias(getShoppingCategories());
     setErro(getUltimoErroDeGravacao());
+    setProximoId(getProximoDeCompra());
   }, []);
 
   const emAnimacao = (id: string) => marcando.has(id) || saindo.has(id);
@@ -184,6 +203,18 @@ export default function ShoppingPage() {
     setAviso(null);
   }
 
+  /*
+   * O eleito só vale enquanto está PENDENTE. Conquistar o item ou excluí-lo
+   * apaga a eleição sozinho, sem código de limpeza em cada caminho — é o que
+   * se ganha guardando um id em vez de um booleano no item.
+   */
+  const proximo = itens.find(i => i.id === proximoId && !i.completed) ?? null;
+
+  function eleger(id: string | null) {
+    setProximoDeCompra(id);
+    setProximoId(id);
+  }
+
   const pendentes = itens.filter(i => !i.completed);
   const conquistados = itens.filter(i => i.completed);
   const verConquistados = filtro === CONQUISTADOS;
@@ -202,17 +233,7 @@ export default function ShoppingPage() {
       })
     : pendentes.filter(naCategoria);
 
-  // Célula "Na lista": segue o filtro de categoria; na aba de conquistados
-  // não faz sentido filtrar, então mostra a lista inteira.
-  const daLista = verConquistados ? pendentes : pendentes.filter(naCategoria);
-  const totalLista = daLista.reduce((s, i) => s + (i.price ?? 0), 0);
-  const rotuloLista = verConquistados || filtro === 'todas'
-    ? 'Na lista'
-    : categorias.find(c => c.id === filtro)?.name ?? 'Sem categoria';
 
-  // Escopo da barra: segue o filtro de categoria. Se fosse sempre a lista
-  // inteira da vida, o denominador só cresceria e a barra travaria — com 50
-  // de 100 conquistados, comprar mais um mexe 0,5% e o número perde sentido.
   /*
    * A trilha é GLOBAL: não segue o filtro de categoria.
    *
@@ -222,17 +243,6 @@ export default function ShoppingPage() {
    */
   const totalConquistados = itens.filter(i => i.completed).length;
 
-  const inicioPeriodo =
-    periodo === 'mes' ? startOfMonth(new Date())
-    : periodo === 'ano' ? startOfYear(new Date())
-    : null;
-
-  const noPeriodo = conquistados.filter(i => {
-    if (!inicioPeriodo) return true;
-    const d = dataConquista(i);
-    return d !== null && d >= inicioPeriodo;
-  });
-  const totalConquistado = noPeriodo.reduce((s, i) => s + (i.price ?? 0), 0);
 
   const uso = getUsoDoArmazenamento();
 
@@ -250,6 +260,8 @@ export default function ShoppingPage() {
       name: item.name,
       categoryId: item.categoryId ?? '',
       price: item.price !== undefined ? String(item.price) : '',
+      tolerancia: item.tolerancia !== undefined ? String(item.tolerancia) : '',
+      guardado: item.guardado !== undefined ? String(item.guardado) : '',
       productUrl: item.productUrl ?? '',
       imageData: item.imageData ?? '',
       imageUrl: item.imageUrl ?? '',
@@ -290,6 +302,8 @@ export default function ShoppingPage() {
       name: form.name.trim(),
       categoryId: form.categoryId || undefined,
       price: preco !== undefined && !Number.isNaN(preco) ? preco : undefined,
+      tolerancia: numeroOuNada(form.tolerancia),
+      guardado: numeroOuNada(form.guardado),
       productUrl: form.productUrl.trim() || undefined,
       imageData: form.imageData || undefined,
       imageUrl: form.imageData ? undefined : form.imageUrl.trim() || undefined,
@@ -334,12 +348,6 @@ export default function ShoppingPage() {
         <h1 className="text-2xl font-bold text-text-primary">Compras</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => setGerenciarAberto(true)}
-            className="rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:border-border-light hover:text-text-primary"
-          >
-            Categorias
-          </button>
-          <button
             onClick={abrirNovo}
             className="btn-grad flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
           >
@@ -349,48 +357,12 @@ export default function ShoppingPage() {
         </div>
       </div>
 
-      {/* Painel: o que falta, o que já foi conquistado e a barra */}
-      <div className="card-soft mb-5 overflow-hidden rounded-2xl border border-border bg-bg-card">
-        <div className="grid grid-cols-2 divide-x divide-border">
-        <div className="p-4">
-          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            {rotuloLista}
-          </p>
-          <p className="mt-1.5 font-arcade text-lg leading-none text-text-primary">{daLista.length}</p>
-          <p className="mt-2 text-xs tabular-nums text-text-secondary">
-            {totalLista > 0 ? moeda(totalLista) : '—'}
-          </p>
-        </div>
+      <FaixaDeLegenda
+        emProjeto={{ itens: pendentes.length, valor: totalDaLista(pendentes) }}
+        executado={{ itens: conquistados.length, valor: totalDaLista(conquistados) }}
+      />
 
-        <div className="p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            Conquistados
-          </p>
-          <p className="mt-1.5 font-arcade text-lg leading-none text-accent-light">{noPeriodo.length}</p>
-          <p className="mt-2 text-xs tabular-nums text-text-secondary">
-            {totalConquistado > 0 ? moeda(totalConquistado) : '—'}
-          </p>
-
-          <div className="mt-3 inline-flex rounded-lg border border-border p-0.5">
-            {PERIODOS.map(p => (
-              <button
-                key={p.chave}
-                onClick={() => setPeriodo(p.chave)}
-                className={`alvo-toque alvo-toque-densa rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-                  periodo === p.chave
-                    ? 'bg-accent/20 text-accent-light'
-                    : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                {p.rotulo}
-              </button>
-            ))}
-          </div>
-        </div>
-        </div>
-
-        <TrilhaDeMarcos conquistados={totalConquistados} />
-      </div>
+      <TrilhaDeMarcos conquistados={totalConquistados} />
 
       {/* Aviso de armazenamento */}
       {erro && (
@@ -419,6 +391,7 @@ export default function ShoppingPage() {
               ? [{ chave: SEM_CATEGORIA, rotulo: 'Sem categoria', contagem: contarEm(SEM_CATEGORIA) }]
               : []),
           ]}
+          onNova={() => setGerenciarAberto(true)}
         />
 
         {/* "Conquistados" fica FORA da fita: não é uma categoria, é um modo
@@ -432,6 +405,15 @@ export default function ShoppingPage() {
           prefixo={<Check size={13} strokeWidth={3} />}
         />
       </div>
+
+      {proximo && (
+        <DetalheDoProximo
+          item={proximo}
+          cor={categorias.find(c => c.id === proximo.categoryId)?.color ?? 'var(--color-accent)'}
+          onAbrir={() => abrirEdicao(proximo)}
+          onSoltar={() => eleger(null)}
+        />
+      )}
 
       {/* Grade */}
       {visiveis.length === 0 ? (
@@ -461,6 +443,8 @@ export default function ShoppingPage() {
               marcando={marcando.has(item.id)}
               saindo={saindo.has(item.id)}
               onEditar={() => abrirEdicao(item)}
+              ehProximo={item.id === proximoId}
+              onEleger={() => eleger(item.id === proximoId ? null : item.id)}
               onExcluir={() => setExcluirItem(item)}
             />
           ))}
@@ -550,6 +534,24 @@ export default function ShoppingPage() {
                   onKeyDown={enterSalva}
                   placeholder="199,90"
                   className="entrada pl-10 tabular-nums"
+                />
+              </div>
+            </Campo>
+
+            {/* Tolerância: raramente se sabe o preço exato do que ainda não
+                se comprou. Sem este campo, o total da lista somava
+                estimativas fingindo ser número certo. */}
+            <Campo rotulo="Margem do preço">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-muted">±</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={form.tolerancia}
+                  onChange={e => setForm(f => ({ ...f, tolerancia: e.target.value }))}
+                  onKeyDown={enterSalva}
+                  placeholder="opcional"
+                  className="entrada pl-8 tabular-nums"
                 />
               </div>
             </Campo>
@@ -816,10 +818,12 @@ function Chip({
 }
 
 function CardProduto({
-  item, categoria, onToggle, onEditar, onExcluir, marcando, saindo,
+  item, categoria, onToggle, onEditar, onExcluir, onEleger, ehProximo, marcando, saindo,
 }: {
   item: ShoppingItem;
   categoria?: ShoppingCategory;
+  ehProximo?: boolean;
+  onEleger: () => void;
   onToggle: () => void;
   onEditar: () => void;
   onExcluir: () => void;
@@ -840,10 +844,16 @@ function CardProduto({
       tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter') onEditar(); }}
       title="Editar item"
-      className={`card-soft group relative cursor-pointer overflow-hidden rounded-2xl border bg-bg-card transition-[opacity,border-color,transform,box-shadow] duration-[260ms] ease-out ${
-        saindo ? 'scale-95 opacity-0' : 'hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/40'
-      }`}
-      style={{ borderColor: marcado ? `color-mix(in oklab, ${cor} 45%, transparent)` : 'var(--color-border)' }}
+      /*
+       * Em desenho técnico, o que ainda não foi construído se desenha
+       * TRACEJADO; o que existe, contínuo. É a regra que dá o estado do item
+       * sem selo, sem check e sem borda colorida — três mecanismos que antes
+       * faziam o mesmo trabalho ao mesmo tempo.
+       */
+      className={`group relative cursor-pointer overflow-hidden rounded-lg border bg-bg-card transition-[opacity,border-color,transform] duration-[260ms] ease-out ${
+        marcado ? 'border-solid' : 'border-dashed'
+      } ${saindo ? 'scale-95 opacity-0' : ''}`}
+      style={{ borderColor: marcado ? cor : 'var(--color-border-light)' }}
     >
       {/* Foto — ou, sem foto, um painel na cor da categoria em vez de um
           buraco vazio com um saco esmaecido no meio. */}
@@ -873,6 +883,11 @@ function CardProduto({
           </>
         )}
 
+        {/* Hachura de corte: em desenho técnico é assim que se mostra que
+            ali tem MATÉRIA. Faz par com a borda tracejada — projetado vira
+            executado. */}
+        {marcado && <span className="hachura pointer-events-none absolute inset-0" aria-hidden />}
+
         {/* Véu no topo: mantém o check e o selo legíveis sobre foto clara */}
         <span className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/45 to-transparent" />
 
@@ -888,7 +903,7 @@ function CardProduto({
                 boxShadow: `0 0 20px color-mix(in oklab, ${cor} 45%, transparent)`,
               }}
             >
-              CONQUISTADO
+              EXECUTADO
             </span>
           </div>
         )}
@@ -903,7 +918,7 @@ function CardProduto({
               backgroundColor: 'rgba(0,0,0,0.55)',
             }}
           >
-            CONQUISTADO
+            EXECUTADO
           </span>
         )}
 
@@ -939,8 +954,14 @@ function CardProduto({
         <div className="mt-3 flex items-center justify-between">
           {/* Preço em branco: a cor da categoria fica só no rótulo dela,
               senão os dois disputam o mesmo destaque. */}
+          {/* A tolerância vem em corpo menor e apagado: ela qualifica o
+              preço, não compete com ele. Prancha cota assim — o valor manda,
+              a margem sussurra. */}
           <span className={`text-sm font-semibold tabular-nums ${item.price ? 'text-text-primary' : 'text-text-muted'}`}>
             {item.price ? moeda(item.price) : '—'}
+            {item.price && item.tolerancia ? (
+              <span className="ml-1 text-[11px] font-normal text-text-muted">±{item.tolerancia}</span>
+            ) : null}
           </span>
           {/* Sempre visíveis: no celular não existe hover, e antes estas
               ações ficavam inalcançáveis. Editar saiu daqui — agora é o
@@ -957,6 +978,18 @@ function CardProduto({
               >
                 <ExternalLink size={14} />
               </a>
+            )}
+            {/* Eleger como o próximo. Só para item pendente: eleger o que já
+                foi comprado não quer dizer nada. */}
+            {!item.completed && (
+              <button
+                onClick={e => { e.stopPropagation(); onEleger(); }}
+                title={ehProximo ? 'Deixar de ser o próximo' : 'Eleger como o próximo'}
+                className="rounded-lg p-1.5 transition-colors"
+                style={{ color: ehProximo ? 'var(--color-accent)' : undefined }}
+              >
+                <Crosshair size={14} className={ehProximo ? '' : 'text-text-muted'} />
+              </button>
             )}
             <button
               onClick={e => { e.stopPropagation(); onExcluir(); }}

@@ -409,6 +409,34 @@ export function getShoppingItems(): ShoppingItem[] {
   return load<ShoppingItem[]>('evo_shopping', []);
 }
 
+/**
+ * O item eleito como o próximo a executar. `null` quando não há nenhum.
+ *
+ * Um id só para a lista inteira, guardado FORA do item de propósito. Como
+ * campo booleano em `ShoppingItem`, dois itens poderiam estar marcados ao
+ * mesmo tempo — um estado que não deve existir e que exigiria limpeza a cada
+ * eleição. Com um id único, "um de cada vez" é garantido por construção.
+ */
+/*
+ * "Sem eleição" é STRING VAZIA no armazenamento, não `null`.
+ *
+ * O `load` acima descarta o valor quando `typeof valor !== typeof fallback`.
+ * Com `null` de padrão o `typeof` é `'object'`, então um id guardado — que é
+ * `'string'` — era rejeitado e a eleição voltava vazia SEMPRE. O padrão
+ * `null` parece o óbvio aqui e é silenciosamente errado; foi assim que
+ * escrevi da primeira vez.
+ *
+ * Guardando `''`, os tipos batem, e a conversão para `null` acontece na
+ * fronteira, onde o resto do app prefere trabalhar.
+ */
+export function getProximoDeCompra(): string | null {
+  return load<string>('evo_shopping_proximo', '') || null;
+}
+
+export function setProximoDeCompra(id: string | null): void {
+  save('evo_shopping_proximo', id ?? '');
+}
+
 // ── Interações de desafio ──
 export function getInteracoes(desafioId: string): Interacao[] {
   return load<Interacao[]>('evo_interacoes', [])

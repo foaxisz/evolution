@@ -38,6 +38,11 @@ export const CHAVES_SINCRONIZADAS = [
   'evo_cookies',
   'evo_shopping',
   'evo_shopping_categories',
+  // Documento inteiro (um id, ou null), não lista: entra pelo caminho do
+  // DOC_INTEIRO. Esquecer esta linha faria a eleição do próximo gravar aqui
+  // e nunca subir — falha silenciosa, que é a marca registrada dos bugs de
+  // sincronização deste projeto.
+  'evo_shopping_proximo',
   'evo_actions',
   'evo_interacoes',
   'evo_foco_categorias',

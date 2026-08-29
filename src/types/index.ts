@@ -103,6 +103,10 @@ export interface ShoppingItem {
   imageUrl?: string;
   productUrl?: string;
   price?: number;
+  /** Margem do preço, em reais: 1200 ±200. Ausente = preço exato. */
+  tolerancia?: number;
+  /** Quanto já foi guardado para comprar este item. */
+  guardado?: number;
   notes?: string;
   completed: boolean;
   createdAt: string;
