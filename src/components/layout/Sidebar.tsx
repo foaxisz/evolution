@@ -84,21 +84,26 @@ export default function Sidebar({ activePage, onNavigate }: SidebarProps) {
       {/* Footer */}
       <div className="border-t border-border px-5 py-4 space-y-2.5">
         <BotaoInstalarPWA />
+        {/* E-mail e "Sair" na MESMA linha, o e-mail truncando e o botão sem
+            encolher.
+
+            Eram duas linhas, e o botão carregava um `ml-auto` que o jogava
+            para a direita — ele existia para separá-lo do "Resincronizar" que
+            ficava à esquerda. Com aquele removido, sobrou um botão solto no
+            canto direito debaixo de um e-mail alinhado à esquerda, sem nada
+            explicando o vão entre os dois. */}
         {email && (
-          <div className="space-y-1.5 pt-1">
-            <p className="text-[11px] text-text-muted truncate">{email}</p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={sair}
-                className="flex items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger ml-auto"
-              >
-                <LogOut size={12} />
-                Sair
-              </button>
-            </div>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <p className="min-w-0 flex-1 truncate text-[11px] text-text-muted" title={email}>{email}</p>
+            <button
+              onClick={sair}
+              className="flex flex-shrink-0 items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger"
+            >
+              <LogOut size={12} />
+              Sair
+            </button>
           </div>
         )}
-        <p className="text-xs text-text-muted pt-1">Versão 1.0.0</p>
       </div>
     </aside>
   );

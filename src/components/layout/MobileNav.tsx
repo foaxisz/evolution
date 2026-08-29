@@ -99,18 +99,19 @@ export default function MobileNav({ activePage, onNavigate }: MobileNavProps) {
 
           <div className="border-t border-border px-4 py-3 space-y-2">
             <BotaoInstalarPWA />
+            {/* Mesmo conserto da barra lateral: era um `ml-auto` que existia
+                para separar o "Sair" do "Resincronizar" ao lado, e sobrou
+                empurrando o botão sozinho para o canto. */}
             {email && (
-              <div className="space-y-1 pt-1">
-                <p className="px-1 text-[11px] text-text-muted truncate">{email}</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => { setMaisAberto(false); sair(); }}
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-danger ml-auto"
-                  >
-                    <LogOut size={13} />
-                    Sair
-                  </button>
-                </div>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <p className="min-w-0 flex-1 truncate px-1 text-[11px] text-text-muted" title={email}>{email}</p>
+                <button
+                  onClick={() => { setMaisAberto(false); sair(); }}
+                  className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-danger"
+                >
+                  <LogOut size={13} />
+                  Sair
+                </button>
               </div>
             )}
           </div>
