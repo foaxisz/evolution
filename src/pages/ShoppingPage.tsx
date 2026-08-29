@@ -326,7 +326,9 @@ export default function ShoppingPage() {
   const acharCategoria = (id?: string) => categorias.find(c => c.id === id);
 
   return (
-    <div className="mx-auto w-full max-w-4xl flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">
+    // `prancha`: recolore a aba inteira por cascata, como o `tube-amber` faz
+    // no Pote de Biscoitos. Nenhum componente abaixo sabe que mudou de mundo.
+    <div className="prancha mx-auto w-full max-w-4xl flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">
       {/* Cabeçalho */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-text-primary">Compras</h1>

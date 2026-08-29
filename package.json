@@ -11,7 +11,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "icones": "node scripts/gerar-icones.mjs",
-    "testar": "node scripts/testar-sincronizacao.mjs && node scripts/testar-mesclagem.mjs && node scripts/testar-tarefas.mjs && node scripts/testar-marcos.mjs"
+    "testar": "node scripts/testar-sincronizacao.mjs && node scripts/testar-mesclagem.mjs && node scripts/testar-tarefas.mjs && node scripts/testar-marcos.mjs && node scripts/testar-compras.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

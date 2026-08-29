@@ -522,6 +522,59 @@ body {
 }
 
 @layer components {
+  /* Prancha técnica — a aba Compras.
+   *
+   * Mesma técnica do `.tube-amber` abaixo: as utilities do Tailwind v4
+   * compilam para `var(--color-*)`, então redefinir as variáveis aqui
+   * recolore a subárvore inteira sem nenhum componente saber disso.
+   *
+   * A aba não é lista de compras: é a lista do que equipa você para virar
+   * quem quer ser. Daí a planta — não se está comprando, se está PROJETANDO
+   * a versão de si. O ciano sobre azul-noite é o que a afasta do roxo do
+   * resto do app, que era o motivo de toda tentativa anterior de reformá-la
+   * ainda parecer "a mesma aba rearranjada".
+   */
+  .prancha {
+    --color-accent: #00d9ff;
+    --color-accent-light: #7febff;
+    --color-accent-dim: #0089a8;
+    --color-accent-bg: rgba(0, 217, 255, 0.1);
+
+    --color-text-primary: #dff0ff;
+    --color-text-secondary: #9dc4e0;
+    --color-text-muted: #5c86a8;
+
+    --color-border: #16324d;
+    --color-border-light: #22557f;
+
+    --color-bg-primary: #050b14;
+    --color-bg-card: #0a1725;
+    --color-bg-card-hover: #102437;
+    --color-bg-input: #08111d;
+
+    /* Malha de papel de engenharia, em DUAS escalas: fina de 22px dentro de
+       grossa de 110px. Com uma escala só ela lê como papel de parede; são as
+       duas juntas que fazem parecer material. */
+    background-color: #050b14;
+    background-image:
+      linear-gradient(rgba(0, 217, 255, 0.10) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 217, 255, 0.10) 1px, transparent 1px),
+      linear-gradient(rgba(0, 217, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 217, 255, 0.035) 1px, transparent 1px);
+    background-size: 110px 110px, 110px 110px, 22px 22px, 22px 22px;
+  }
+
+  /* Hachura de corte: em desenho técnico, é assim que se mostra que ali tem
+     MATÉRIA. Marca o item já conquistado, fazendo par com a borda tracejada
+     do que ainda é só projeto. */
+  .hachura {
+    background-image: repeating-linear-gradient(
+      45deg,
+      color-mix(in oklab, var(--color-accent) 16%, transparent) 0 1px,
+      transparent 1px 7px
+    );
+  }
+
   /* Tubo âmbar — Pote de Biscoitos e Reviews.
      Funciona por cascata: as utilities do v4 compilam para var(--color-*),
      então redefinir as variáveis aqui recolore a subárvore inteira. */
