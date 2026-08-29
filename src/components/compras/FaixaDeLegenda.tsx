@@ -31,7 +31,7 @@ export default function FaixaDeLegenda({
 }) {
   const caixas = [
     { rotulo: 'Em projeto', dados: emProjeto, aceso: false },
-    { rotulo: 'Executado', dados: executado, aceso: true },
+    { rotulo: 'Conquistado', dados: executado, aceso: true },
   ];
 
   return (

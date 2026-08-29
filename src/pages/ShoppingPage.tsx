@@ -362,12 +362,22 @@ export default function ShoppingPage() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-text-primary">Compras</h1>
         <div className="flex gap-2">
+          {/* Só o "+", num círculo de roxo calmo. O gradiente forte do
+              `btn-grad` puxava o olho para o canto superior direito antes de
+              qualquer coisa da lista — e a lista é o assunto da tela. */}
           <button
             onClick={abrirNovo}
-            className="btn-grad flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white"
+            aria-label="Novo item"
+            title="Novo item"
+            className="flex h-10 w-10 items-center justify-center rounded-full border-solid transition-colors duration-200"
+            style={{
+              borderWidth: 1,
+              borderColor: 'color-mix(in oklab, var(--color-accent) 40%, transparent)',
+              backgroundColor: 'color-mix(in oklab, var(--color-accent) 18%, transparent)',
+              color: 'var(--color-accent-light)',
+            }}
           >
-            <Plus size={16} />
-            Novo item
+            <Plus size={18} />
           </button>
         </div>
       </div>
@@ -406,16 +416,19 @@ export default function ShoppingPage() {
               ? [{ chave: SEM_CATEGORIA, rotulo: 'Sem categoria', contagem: contarEm(SEM_CATEGORIA) }]
               : []),
             /*
-             * "Executados" entra na fita como último segmento.
+             * "Conquistados" entra na fita como último segmento.
              *
              * Ficou de fora na primeira versão, como pílula redonda, sob o
              * argumento de que não é categoria e sim modo de ver. O argumento
              * é verdadeiro e o resultado foi ruim: ao lado de uma fita
              * quadrada de fonte arcade, a pílula não lia como "outra coisa",
-             * lia como sobra. Dentro, com a cor de sucesso, a diferença de
-             * natureza aparece pela cor sem quebrar a peça única.
+             * lia como sobra.
+             *
+             * Chegou a ter a cor de sucesso para se distinguir, e o verde
+             * destoou de tudo. Fica no roxo da aba: a posição no fim da fita
+             * e o número já bastam para separá-lo das categorias.
              */
-            { chave: CONQUISTADOS, rotulo: 'Executados', cor: 'var(--color-success)', contagem: conquistados.length },
+            { chave: CONQUISTADOS, rotulo: 'Conquistados', contagem: conquistados.length },
           ]}
         />
       </div>
@@ -887,7 +900,7 @@ function CardProduto({
                 boxShadow: `0 0 20px color-mix(in oklab, ${cor} 45%, transparent)`,
               }}
             >
-              EXECUTADO
+              CONQUISTADO
             </span>
           </div>
         )}
@@ -902,7 +915,7 @@ function CardProduto({
               backgroundColor: 'rgba(0,0,0,0.55)',
             }}
           >
-            EXECUTADO
+            CONQUISTADO
           </span>
         )}
 
