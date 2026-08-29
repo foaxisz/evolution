@@ -25,3 +25,6 @@ dist-ssr
 
 # Temporários da CLI do Supabase
 supabase/.temp
+
+# Mockups do brainstorm visual — artefatos de sessão, não código
+.superpowers/
