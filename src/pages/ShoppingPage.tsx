@@ -553,17 +553,32 @@ export default function ShoppingPage() {
                 ativo={form.categoryId || SEM_CATEGORIA}
                 onEscolher={ch => setForm(f => ({ ...f, categoryId: ch === SEM_CATEGORIA ? '' : ch }))}
                 segmentos={[
-                  { chave: SEM_CATEGORIA, rotulo: 'Sem categoria' },
+                  /*
+                   * "—", não "Sem categoria" por extenso.
+                   *
+                   * Aqui a opção é a primeira e vem selecionada por padrão, e
+                   * o rótulo inteiro comia quase metade da fita — sobrava
+                   * pouco espaço para as categorias, que são o assunto do
+                   * campo. O travessão diz "nenhuma" e o `title` continua
+                   * escrevendo por extenso para quem passa o mouse ou usa
+                   * leitor de tela.
+                   *
+                   * Na fita do FILTRO ele continua por extenso: lá o segmento
+                   * concorre com nomes de categoria e precisa se explicar.
+                   */
+                  { chave: SEM_CATEGORIA, rotulo: '—', titulo: 'Sem categoria' },
                   ...categorias.map(c => ({ chave: c.id, rotulo: c.name, cor: c.color, icone: c.icon })),
                 ]}
               />
               <button
                 type="button"
                 onClick={() => { setCatForm({ id: '', name: '', icon: 'target', color: CORES[0] }); setCatAberta(true); }}
-                className="flex items-center gap-1 rounded-full border border-dashed border-border-light px-3 py-1.5 text-sm text-text-muted transition-colors hover:border-accent hover:text-accent-light"
+                aria-label="Nova categoria"
+                title="Nova categoria"
+                className="font-arcade flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[3px] border-2 border-dashed text-[0.7rem] leading-none transition-colors"
+                style={{ borderColor: 'var(--color-border-light)', color: 'var(--color-text-muted)' }}
               >
-                <Plus size={13} />
-                Nova
+                +
               </button>
             </div>
           </Campo>

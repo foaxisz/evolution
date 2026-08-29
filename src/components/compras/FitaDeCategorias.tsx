@@ -10,6 +10,11 @@ export interface SegmentoDeCategoria {
   icone?: string;
   /** Ausente = segmento sem número (é o caso do formulário). */
   contagem?: number;
+  /**
+   * Texto longo para a dica, quando o rótulo é curto demais para se explicar
+   * sozinho — o "—" de "sem categoria" no formulário.
+   */
+  titulo?: string;
 }
 
 /**
@@ -65,6 +70,8 @@ export default function FitaDeCategorias({
               type="button"
               role="tab"
               aria-selected={on}
+              title={s.titulo}
+              aria-label={s.titulo}
               onClick={() => onEscolher(s.chave)}
               className="flex flex-shrink-0 items-center gap-2.5 px-4 py-3 transition-colors duration-200"
               style={{
