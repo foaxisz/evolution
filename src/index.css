@@ -535,32 +535,24 @@ body {
    * ainda parecer "a mesma aba rearranjada".
    */
   .prancha {
-    --color-accent: #00d9ff;
-    --color-accent-light: #7febff;
-    --color-accent-dim: #0089a8;
-    --color-accent-bg: rgba(0, 217, 255, 0.1);
-
-    --color-text-primary: #dff0ff;
-    --color-text-secondary: #9dc4e0;
-    --color-text-muted: #5c86a8;
-
-    --color-border: #16324d;
-    --color-border-light: #22557f;
-
-    --color-bg-primary: #050b14;
-    --color-bg-card: #0a1725;
-    --color-bg-card-hover: #102437;
-    --color-bg-input: #08111d;
-
-    /* Malha de papel de engenharia, em DUAS escalas: fina de 22px dentro de
-       grossa de 110px. Com uma escala só ela lê como papel de parede; são as
-       duas juntas que fazem parecer material. */
-    background-color: #050b14;
+    /*
+     * Nenhuma variável de cor aqui — a aba usa o roxo do resto do app.
+     *
+     * Havia uma paleta ciano inteira nesta classe, e ela foi removida a
+     * pedido: fica o roxo, ficam os quadradinhos. Sobrou só a malha, e é
+     * melhor assim — a prancha passa a ser uma TEXTURA sobre o mundo que já
+     * existe, em vez de um segundo mundo a manter em sincronia com o
+     * primeiro. Trocar o roxo do app agora leva esta aba junto de graça.
+     *
+     * Malha de papel de engenharia, em DUAS escalas: fina de 22px dentro de
+     * grossa de 110px. Com uma escala só ela lê como papel de parede; são as
+     * duas juntas que fazem parecer material.
+     */
     background-image:
-      linear-gradient(rgba(0, 217, 255, 0.10) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 217, 255, 0.10) 1px, transparent 1px),
-      linear-gradient(rgba(0, 217, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 217, 255, 0.035) 1px, transparent 1px);
+      linear-gradient(rgba(168, 85, 247, 0.10) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168, 85, 247, 0.10) 1px, transparent 1px),
+      linear-gradient(rgba(168, 85, 247, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168, 85, 247, 0.035) 1px, transparent 1px);
     background-size: 110px 110px, 110px 110px, 22px 22px, 22px 22px;
   }
 

@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { trilha, faltamPara, MARCOS } from '../../lib/marcos';
+import { trilha, MARCOS } from '../../lib/marcos';
 
 /**
  * A trilha de marcos, desenhada como COTA de desenho técnico.
@@ -16,7 +16,6 @@ import { trilha, faltamPara, MARCOS } from '../../lib/marcos';
  */
 export default function TrilhaDeMarcos({ conquistados }: { conquistados: number }) {
   const pontos = trilha(conquistados);
-  const faltam = faltamPara(conquistados);
 
   /*
    * Onde a seta pousa, em porcentagem da largura.
@@ -98,12 +97,6 @@ export default function TrilhaDeMarcos({ conquistados }: { conquistados: number 
         ))}
       </div>
 
-      <p className="mt-3 text-xs text-text-muted">
-        <span className="tabular-nums text-text-secondary">
-          {conquistados} {conquistados === 1 ? 'executado' : 'executados'}
-        </span>
-        {faltam !== null && ` · ${faltam === 1 ? 'falta 1' : `faltam ${faltam}`} para o próximo marco`}
-      </p>
     </div>
   );
 }
