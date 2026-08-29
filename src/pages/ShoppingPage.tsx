@@ -20,6 +20,7 @@ import type { ShoppingItem, ShoppingCategory } from '../types';
 import Modal from '../components/ui/Modal';
 import Toast from '../components/ui/Toast';
 import EmptyState from '../components/ui/EmptyState';
+import TrilhaDeMarcos from '../components/compras/TrilhaDeMarcos';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import HabitIcon, { HABIT_ICONS, HABIT_ICON_KEYS } from '../components/ui/HabitIcon';
 import { reduzirImagem, formatarBytes } from '../lib/imagem';
@@ -222,9 +223,14 @@ export default function ShoppingPage() {
   // Escopo da barra: segue o filtro de categoria. Se fosse sempre a lista
   // inteira da vida, o denominador só cresceria e a barra travaria — com 50
   // de 100 conquistados, comprar mais um mexe 0,5% e o número perde sentido.
-  const escopoItens = verConquistados || filtro === 'todas' ? itens : itens.filter(naCategoria);
-  const escopoTotal = escopoItens.length;
-  const escopoConquistados = escopoItens.filter(i => i.completed).length;
+  /*
+   * A trilha é GLOBAL: não segue o filtro de categoria.
+   *
+   * A barra anterior seguia, e por isso mudava ao clicar num filtro — o que
+   * a fazia parecer o progresso da prateleira, não o seu. Progresso de quem
+   * usa o app não muda porque a vista foi filtrada.
+   */
+  const totalConquistados = itens.filter(i => i.completed).length;
 
   const inicioPeriodo =
     periodo === 'mes' ? startOfMonth(new Date())
@@ -391,11 +397,7 @@ export default function ShoppingPage() {
         </div>
         </div>
 
-        <BarraEvolucao
-          conquistados={escopoConquistados}
-          total={escopoTotal}
-          escopoRotulo={filtro !== 'todas' && !verConquistados ? rotuloLista : undefined}
-        />
+        <TrilhaDeMarcos conquistados={totalConquistados} />
       </div>
 
       {/* Aviso de armazenamento */}

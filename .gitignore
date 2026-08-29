@@ -28,3 +28,5 @@ supabase/.temp
 
 # Mockups do brainstorm visual — artefatos de sessão, não código
 .superpowers/
+.env.local.guardado
+.env.local.*
