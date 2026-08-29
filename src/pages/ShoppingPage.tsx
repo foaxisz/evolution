@@ -340,9 +340,24 @@ export default function ShoppingPage() {
   const acharCategoria = (id?: string) => categorias.find(c => c.id === id);
 
   return (
-    // `prancha`: recolore a aba inteira por cascata, como o `tube-amber` faz
-    // no Pote de Biscoitos. Nenhum componente abaixo sabe que mudou de mundo.
-    <div className="prancha mx-auto w-full max-w-4xl flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">
+    /*
+     * DUAS camadas, e a separação importa.
+     *
+     * A `prancha` carrega o fundo e a malha, então ela precisa ocupar a ABA
+     * INTEIRA. Estava junto com o `max-w-4xl`, e o resultado era a prancha
+     * virar um retângulo de 896px boiando num vão escuro — o mundo terminava
+     * no meio da tela.
+     *
+     * O `.tube-amber` do Pote de Biscoitos pode viver na caixa estreita
+     * porque define SÓ variáveis de cor, sem fundo. Ao dar fundo à prancha eu
+     * saí desse padrão sem levar o contêiner junto.
+     *
+     * A altura mínima desconta a barra de navegação do celular, que fica
+     * dentro do `main`: sem isso, `100dvh` aqui dentro criaria 4rem de
+     * rolagem morta no telefone.
+     */
+    <div className="prancha min-h-[calc(100dvh-4rem)] w-full p-4 animate-fade-in md:min-h-dvh md:p-6 lg:p-8">
+      <div className="mx-auto w-full max-w-4xl">
       {/* Cabeçalho */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-text-primary">Compras</h1>
@@ -768,6 +783,7 @@ export default function ShoppingPage() {
         confirmLabel="Excluir"
         danger
       />
+      </div>
     </div>
   );
 }
