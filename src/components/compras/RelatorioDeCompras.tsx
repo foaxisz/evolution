@@ -13,11 +13,23 @@ function escrever(f: Faixa): string {
   return `${moeda(f.min)} – ${moeda(f.max).replace(/^R\$\s?/, '')}`;
 }
 
-/** 'YYYY-MM' → 'ago' / 'ago 25' quando o ano não é o corrente. */
-function rotuloDoMes(mes: string, anoAtual: number): string {
+/**
+ * 'YYYY-MM' → 'ago'.
+ *
+ * Sem o ano. Ele estava aqui para desambiguar, mas numa janela de doze meses
+ * cada mês aparece UMA vez — não há o que confundir. E "set 25" quebrava em
+ * duas linhas debaixo das barras, deixando quatro rótulos com o pé
+ * desalinhado dos outros oito.
+ */
+function rotuloDoMes(mes: string): string {
+  const m = Number(mes.split('-')[1]);
+  return MESES_CURTOS[m - 1] ?? '?';
+}
+
+/** Para os recordes, onde o mês aparece sozinho e o ano faz falta. */
+function mesPorExtenso(mes: string): string {
   const [ano, m] = mes.split('-').map(Number);
-  const nome = MESES_CURTOS[m - 1] ?? '?';
-  return ano === anoAtual ? nome : `${nome} ${String(ano).slice(2)}`;
+  return `${MESES_CURTOS[m - 1] ?? '?'} ${String(ano).slice(2)}`;
 }
 
 function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -56,7 +68,6 @@ export default function RelatorioDeCompras({
 
   const linha = porMes(itens, hoje, 12);
   const pico = Math.max(1, ...linha.map(m => m.quantidade));
-  const anoAtual = Number(hoje.slice(0, 4));
 
   const r = recordes(itens, hoje);
   const temRecorde = r.maisCaro || r.melhorMes || r.esperaMaisLonga;
@@ -98,24 +109,37 @@ export default function RelatorioDeCompras({
         </Bloco>
 
         <Bloco titulo="Últimos 12 meses">
-          {/* Barras de altura proporcional ao pico. Mês vazio mantém um fio de
-              2px em vez de sumir: uma coluna ausente lê como "não houve mês",
-              e o que houve foi um mês sem conquista. */}
-          <div className="flex h-24 items-end gap-1">
+          {/*
+            * Cada mês é uma COLUNA de altura fixa com a barra crescendo do pé.
+            *
+            * Antes as barras flutuavam soltas num `items-end`, e com um mês só
+            * tendo dado o gráfico virava uma torre isolada no vazio — parecia
+            * quebrado, não vazio. Agora a trilha da coluna fica sempre
+            * desenhada e a barra a preenche: onde não houve conquista, vê-se
+            * uma coluna vazia, que é uma informação; antes não se via nada.
+            */}
+          <div className="flex items-end gap-1">
             {linha.map(m => (
-              <div key={m.mes} className="flex flex-1 flex-col items-center gap-1.5" title={`${m.quantidade} em ${m.mes}`}>
-                <span
-                  className="w-full rounded-[1px] transition-[height] duration-500"
-                  style={{
-                    height: m.quantidade > 0 ? `${Math.max(8, (m.quantidade / pico) * 76)}px` : '2px',
-                    backgroundColor: m.quantidade > 0 ? 'var(--color-accent)' : 'var(--color-border)',
-                    boxShadow: m.quantidade > 0
-                      ? '0 0 6px color-mix(in oklab, var(--color-accent) 40%, transparent)'
-                      : undefined,
-                  }}
-                />
-                <span className="font-arcade text-[0.4rem] leading-none text-text-muted">
-                  {rotuloDoMes(m.mes, anoAtual)}
+              <div key={m.mes} className="flex flex-1 flex-col items-center gap-2" title={`${m.quantidade} em ${m.mes}`}>
+                <div
+                  className="flex h-20 w-full items-end rounded-[2px]"
+                  style={{ backgroundColor: 'var(--color-bg-input)' }}
+                >
+                  <span
+                    className="w-full rounded-[2px] transition-[height] duration-500"
+                    style={{
+                      height: m.quantidade > 0 ? `${Math.max(10, (m.quantidade / pico) * 100)}%` : 0,
+                      backgroundColor: 'var(--color-accent)',
+                      boxShadow: m.quantidade > 0
+                        ? '0 0 6px color-mix(in oklab, var(--color-accent) 40%, transparent)'
+                        : undefined,
+                    }}
+                  />
+                </div>
+                {/* `whitespace-nowrap`: o rótulo nunca pode quebrar, senão as
+                    colunas ficam com o pé em alturas diferentes. */}
+                <span className="font-arcade whitespace-nowrap text-[0.4rem] leading-none text-text-muted">
+                  {rotuloDoMes(m.mes)}
                 </span>
               </div>
             ))}
@@ -132,7 +156,7 @@ export default function RelatorioDeCompras({
               {[
                 r.maisCaro && { k: 'O mais caro', v: r.maisCaro.nome, extra: moeda(r.maisCaro.valor) },
                 r.melhorMes && {
-                  k: 'Melhor mês', v: rotuloDoMes(r.melhorMes.mes, anoAtual),
+                  k: 'Melhor mês', v: mesPorExtenso(r.melhorMes.mes),
                   extra: `${r.melhorMes.quantidade} ${r.melhorMes.quantidade === 1 ? 'item' : 'itens'}`,
                 },
                 r.esperaMaisLonga && {

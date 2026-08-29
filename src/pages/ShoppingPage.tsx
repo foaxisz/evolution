@@ -371,10 +371,11 @@ export default function ShoppingPage() {
             onClick={() => setRelatorioAberto(true)}
             aria-label="Relatório"
             title="Relatório"
-            className="flex h-10 w-10 items-center justify-center rounded-full border-solid transition-colors duration-200"
+            className="flex h-10 w-10 items-center justify-center rounded-[3px] border-solid transition-colors duration-200"
             style={{
-              borderWidth: 1,
+              borderWidth: 2,
               borderColor: 'var(--color-border)',
+              backgroundColor: 'var(--color-bg-card)',
               color: 'var(--color-text-muted)',
             }}
           >
@@ -384,11 +385,14 @@ export default function ShoppingPage() {
             onClick={abrirNovo}
             aria-label="Novo item"
             title="Novo item"
-            className="flex h-10 w-10 items-center justify-center rounded-full border-solid transition-colors duration-200"
+            /* Quadrado de canto 3px, como as casas do calendário, os pinos da
+               trilha e os segmentos da fita. Redondo destoava de uma aba em
+               que tudo o mais tem canto reto. */
+            className="flex h-10 w-10 items-center justify-center rounded-[3px] border-solid transition-colors duration-200"
             style={{
-              borderWidth: 1,
-              borderColor: 'color-mix(in oklab, var(--color-accent) 40%, transparent)',
-              backgroundColor: 'color-mix(in oklab, var(--color-accent) 18%, transparent)',
+              borderWidth: 2,
+              borderColor: 'color-mix(in oklab, var(--color-accent) 55%, transparent)',
+              backgroundColor: 'color-mix(in oklab, var(--color-accent) 16%, transparent)',
               color: 'var(--color-accent-light)',
             }}
           >
@@ -933,35 +937,31 @@ function CardProduto({
         {/* Véu no topo: mantém o check e o selo legíveis sobre foto clara */}
         <span className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/45 to-transparent" />
 
-        {/* Carimbo do momento da compra */}
-        {marcando && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/45">
+        {/*
+          * O carimbo diagonal É o estado, não só a comemoração do instante.
+          *
+          * Havia dois: este no meio, só durante a animação da compra, e um
+          * selo pequeno no canto superior esquerdo para o resto do tempo. O
+          * do canto era o pior dos dois e ficava o tempo todo. Agora o
+          * diagonal fica — a animação e o véu escuro entram apenas no
+          * momento da compra, que é quando há o que comemorar.
+          */}
+        {marcado && (
+          <div className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center ${marcando ? 'bg-black/45' : ''}`}>
             <span
-              className="carimbo rounded-lg border-2 px-2.5 py-2 font-arcade text-[9px] leading-none"
+              className={`${marcando ? 'carimbo' : ''} rounded-[3px] border-2 px-2.5 py-2 font-arcade text-[9px] leading-none`}
               style={{
                 borderColor: cor,
                 color: cor,
+                transform: 'rotate(-8deg)',
                 textShadow: `0 0 10px ${cor}`,
                 boxShadow: `0 0 20px color-mix(in oklab, ${cor} 45%, transparent)`,
+                backgroundColor: 'rgba(0,0,0,0.35)',
               }}
             >
               CONQUISTADO
             </span>
           </div>
-        )}
-
-        {/* Selo permanente na aba de conquistados */}
-        {item.completed && !marcando && (
-          <span
-            className="absolute left-2 top-2 rounded-md border px-1.5 py-1 font-arcade text-[7px] leading-none"
-            style={{
-              borderColor: `color-mix(in oklab, ${cor} 55%, transparent)`,
-              color: cor,
-              backgroundColor: 'rgba(0,0,0,0.55)',
-            }}
-          >
-            CONQUISTADO
-          </span>
         )}
 
         <button
