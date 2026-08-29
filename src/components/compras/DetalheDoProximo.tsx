@@ -45,7 +45,7 @@ export default function DetalheDoProximo({
       {/* A etiqueta monta na borda, com o fundo da página por trás para
           "cortar" a linha — é assim que prancha marca um detalhe. */}
       <span
-        className="font-arcade absolute -top-[7px] left-3 px-1.5 text-[6px] uppercase leading-none"
+        className="font-arcade absolute -top-[7px] left-3 px-1.5 text-[0.5rem] uppercase leading-none"
         style={{ backgroundColor: 'var(--color-bg-primary)', color: 'var(--color-accent)' }}
       >
         Detalhe A
@@ -73,7 +73,7 @@ export default function DetalheDoProximo({
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className="font-arcade text-[6px] uppercase leading-none tracking-[0.06em]" style={{ color: 'var(--color-accent)' }}>
+        <p className="font-arcade text-[0.5rem] uppercase leading-none tracking-[0.06em]" style={{ color: 'var(--color-accent)' }}>
           Próximo a executar
         </p>
 
@@ -86,10 +86,10 @@ export default function DetalheDoProximo({
         {faixa && (
           <>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="font-arcade text-[11px] leading-none" style={{ color: 'var(--color-accent)' }}>
+              <span className="font-arcade text-[0.85rem] leading-none" style={{ color: 'var(--color-accent)' }}>
                 {moeda(guardado)}
               </span>
-              <span className="font-arcade text-[6.5px] uppercase leading-none text-text-muted">
+              <span className="font-arcade text-[0.5rem] uppercase leading-none text-text-muted">
                 de {moeda(item.price!)}{item.tolerancia ? ` ±${item.tolerancia}` : ''}
               </span>
             </div>
@@ -108,14 +108,14 @@ export default function DetalheDoProximo({
               />
             </div>
 
-            <p className="mt-2 text-[11px] text-text-muted">
+            <p className="mt-2.5 text-xs text-text-muted">
               {falta > 0 ? `faltam ${moeda(falta)}` : 'já dá para executar'}
             </p>
           </>
         )}
 
         {!faixa && (
-          <p className="mt-2 text-[11px] text-text-muted">
+          <p className="mt-2.5 text-xs text-text-muted">
             Sem preço definido — anote um para acompanhar o quanto falta.
           </p>
         )}

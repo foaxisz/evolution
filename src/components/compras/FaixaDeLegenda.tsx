@@ -39,7 +39,7 @@ export default function FaixaDeLegenda({
       {caixas.map(c => (
         <div
           key={c.rotulo}
-          className="flex-1 rounded-md border-solid px-3.5 py-3"
+          className="flex-1 rounded-md border-solid px-4 py-3.5"
           style={{
             borderWidth: 1,
             borderColor: c.aceso
@@ -48,16 +48,16 @@ export default function FaixaDeLegenda({
             backgroundColor: 'var(--color-bg-card)',
           }}
         >
-          <p className="font-arcade text-[6px] uppercase leading-none tracking-[0.06em] text-text-muted">
+          <p className="font-arcade text-[0.5rem] uppercase leading-none tracking-[0.06em] text-text-muted">
             {c.rotulo}
           </p>
           <p
-            className="font-arcade mt-2.5 text-[13px] leading-none"
+            className="font-arcade mt-3 text-[1.05rem] leading-none"
             style={{ color: c.aceso ? 'var(--color-accent)' : 'var(--color-text-primary)' }}
           >
             {escrever(c.dados.valor)}
           </p>
-          <p className="mt-2 text-[11px] tabular-nums text-text-muted">
+          <p className="mt-2.5 text-xs tabular-nums text-text-muted">
             {c.dados.itens} {c.dados.itens === 1 ? 'item' : 'itens'}
           </p>
         </div>

@@ -376,33 +376,32 @@ export default function ShoppingPage() {
       )}
 
       {/* Filtros */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
+      <div className="mb-5">
         <FitaDeCategorias
-          ativo={verConquistados ? '' : filtro}
+          ativo={filtro}
           onEscolher={setFiltro}
+          onNova={() => setGerenciarAberto(true)}
           segmentos={[
             { chave: 'todas', rotulo: 'Todas', contagem: pendentes.length },
             ...categorias.map(c => ({
               chave: c.id, rotulo: c.name, cor: c.color, icone: c.icon, contagem: contarEm(c.id),
             })),
-            // "Sem categoria" só existe quando existe item sem categoria —
-            // era assim antes e continua.
+            // "Sem categoria" só existe quando existe item sem categoria.
             ...(pendentes.some(i => !i.categoryId)
               ? [{ chave: SEM_CATEGORIA, rotulo: 'Sem categoria', contagem: contarEm(SEM_CATEGORIA) }]
               : []),
+            /*
+             * "Executados" entra na fita como último segmento.
+             *
+             * Ficou de fora na primeira versão, como pílula redonda, sob o
+             * argumento de que não é categoria e sim modo de ver. O argumento
+             * é verdadeiro e o resultado foi ruim: ao lado de uma fita
+             * quadrada de fonte arcade, a pílula não lia como "outra coisa",
+             * lia como sobra. Dentro, com a cor de sucesso, a diferença de
+             * natureza aparece pela cor sem quebrar a peça única.
+             */
+            { chave: CONQUISTADOS, rotulo: 'Executados', cor: 'var(--color-success)', contagem: conquistados.length },
           ]}
-          onNova={() => setGerenciarAberto(true)}
-        />
-
-        {/* "Conquistados" fica FORA da fita: não é uma categoria, é um modo
-            de ver a mesma lista. Dentro dela, pareceria mais uma prateleira. */}
-        <Chip
-          ativo={verConquistados}
-          onClick={() => setFiltro(verConquistados ? 'todas' : CONQUISTADOS)}
-          rotulo="Conquistados"
-          contagem={conquistados.length}
-          cor="var(--color-success)"
-          prefixo={<Check size={13} strokeWidth={3} />}
         />
       </div>
 
@@ -783,37 +782,6 @@ function Campo({ rotulo, obrigatorio, children }: { rotulo: string; obrigatorio?
       </label>
       {children}
     </div>
-  );
-}
-
-/**
- * O chip de "Conquistados".
- *
- * Sobrou sozinho depois que as categorias viraram fita: ele não é uma
- * categoria, é um MODO DE VER a mesma lista, e dentro da fita pareceria só
- * mais uma prateleira. Fica de fora, com o desenho arredondado de antes, que
- * é justamente o que o separa dos segmentos.
- */
-function Chip({
-  ativo, onClick, rotulo, contagem, cor, prefixo,
-}: {
-  ativo: boolean; onClick: () => void; rotulo: string; contagem: number;
-  cor?: string; prefixo?: React.ReactNode;
-}) {
-  const c = cor ?? 'var(--color-accent)';
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-[background-color,border-color] duration-200"
-      style={{
-        backgroundColor: ativo ? `color-mix(in oklab, ${c} 18%, transparent)` : 'var(--color-bg-card)',
-        borderColor: ativo ? c : 'var(--color-border)',
-      }}
-    >
-      {prefixo && <span style={{ color: ativo ? c : 'var(--color-text-muted)' }}>{prefixo}</span>}
-      <span className={ativo ? 'font-medium text-text-primary' : 'text-text-secondary'}>{rotulo}</span>
-      <span className="text-xs text-text-muted">{contagem}</span>
-    </button>
   );
 }
 

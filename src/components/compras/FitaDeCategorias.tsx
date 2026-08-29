@@ -66,7 +66,7 @@ export default function FitaDeCategorias({
               role="tab"
               aria-selected={on}
               onClick={() => onEscolher(s.chave)}
-              className="flex flex-shrink-0 items-center gap-2 px-3.5 py-2.5 transition-colors duration-200"
+              className="flex flex-shrink-0 items-center gap-2.5 px-4 py-3 transition-colors duration-200"
               style={{
                 // Filete só ENTRE segmentos: no último ele viraria uma borda
                 // dupla junto com a da fita.
@@ -90,14 +90,14 @@ export default function FitaDeCategorias({
                 <HabitIcon name={s.icone} size={12} color={on ? cor : 'var(--color-text-muted)'} />
               )}
               <span
-                className="font-arcade whitespace-nowrap text-[7px] uppercase leading-none"
+                className="font-arcade whitespace-nowrap text-[0.5rem] uppercase leading-none"
                 style={{ color: on ? cor : 'var(--color-text-muted)' }}
               >
                 {s.rotulo}
               </span>
               {s.contagem !== undefined && (
                 <span
-                  className="font-arcade text-[8px] leading-none"
+                  className="font-arcade text-[0.55rem] leading-none"
                   style={{ color: on ? 'var(--color-text-primary)' : 'var(--color-border-light)' }}
                 >
                   {s.contagem}
@@ -113,7 +113,7 @@ export default function FitaDeCategorias({
             onClick={onNova}
             aria-label="Nova categoria"
             title="Nova categoria"
-            className="font-arcade flex flex-shrink-0 items-center px-4 py-2.5 text-[9px] leading-none transition-colors duration-200"
+            className="font-arcade flex flex-shrink-0 items-center px-4 py-3 text-[0.7rem] leading-none transition-colors duration-200"
             style={{
               borderLeft: '1px solid var(--color-border)',
               color: 'var(--color-border-light)',

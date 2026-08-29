@@ -36,7 +36,7 @@ export default function TrilhaDeMarcos({ conquistados }: { conquistados: number 
     <div className="relative mb-5 px-1 pt-4">
       {conquistados > 0 && (
         <span
-          className="font-arcade pointer-events-none absolute top-0 whitespace-nowrap text-[6px] leading-none"
+          className="font-arcade pointer-events-none absolute top-0 whitespace-nowrap text-[0.45rem] leading-none"
           style={{
             left: `${posicao}%`,
             // Acima de 85% a etiqueta sairia pela direita, então ela vira e
@@ -68,7 +68,7 @@ export default function TrilhaDeMarcos({ conquistados }: { conquistados: number 
             )}
             {/* Traço perpendicular, como a marca de uma régua. */}
             <span
-              className="h-[9px] w-px flex-shrink-0 transition-colors duration-300"
+              className="h-[11px] w-px flex-shrink-0 transition-colors duration-300"
               style={{
                 backgroundColor: p.aceso ? 'var(--color-accent)' : 'var(--color-border-light)',
                 boxShadow: p.aceso
@@ -84,7 +84,7 @@ export default function TrilhaDeMarcos({ conquistados }: { conquistados: number 
         {pontos.map((p, i) => (
           <span
             key={p.marco}
-            className="font-arcade text-[6.5px] leading-none transition-colors duration-300"
+            className="font-arcade text-[0.5rem] leading-none transition-colors duration-300"
             style={{
               color: p.aceso ? 'var(--color-accent-light)' : 'var(--color-text-muted)',
               // Primeiro e último ancoram nas pontas; os do meio se centram no
@@ -98,7 +98,7 @@ export default function TrilhaDeMarcos({ conquistados }: { conquistados: number 
         ))}
       </div>
 
-      <p className="mt-2.5 text-[11px] text-text-muted">
+      <p className="mt-3 text-xs text-text-muted">
         <span className="tabular-nums text-text-secondary">
           {conquistados} {conquistados === 1 ? 'executado' : 'executados'}
         </span>
