@@ -281,6 +281,20 @@ body {
     display: none;
   }
 
+  /* A irmã horizontal, para a fita de categorias das Compras.
+     Separada porque a `.rolagem-limpa` trava o X DE PROPÓSITO — reusá-la ali
+     esconderia a barra e impediria a rolagem ao mesmo tempo, e a fita
+     simplesmente ficaria cortada com muitas categorias. */
+  .rolagem-lateral {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .rolagem-lateral::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Cabine em tela cheia. Entra crescendo de leve, nunca de estalo. */
   .cabine-entrando {
     animation: cabineEntra 0.26s cubic-bezier(0.22, 1, 0.36, 1);

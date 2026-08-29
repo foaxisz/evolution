@@ -21,6 +21,7 @@ import Modal from '../components/ui/Modal';
 import Toast from '../components/ui/Toast';
 import EmptyState from '../components/ui/EmptyState';
 import TrilhaDeMarcos from '../components/compras/TrilhaDeMarcos';
+import FitaDeCategorias from '../components/compras/FitaDeCategorias';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import HabitIcon, { HABIT_ICONS, HABIT_ICON_KEYS } from '../components/ui/HabitIcon';
 import { reduzirImagem, formatarBytes } from '../lib/imagem';
@@ -413,24 +414,24 @@ export default function ShoppingPage() {
 
       {/* Filtros */}
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <Chip ativo={filtro === 'todas'} onClick={() => setFiltro('todas')} rotulo="Todas" contagem={pendentes.length} />
-        {categorias.map(c => (
-          <Chip
-            key={c.id}
-            ativo={filtro === c.id}
-            onClick={() => setFiltro(c.id)}
-            rotulo={c.name}
-            contagem={contarEm(c.id)}
-            cor={c.color}
-            icone={c.icon}
-          />
-        ))}
-        {pendentes.some(i => !i.categoryId) && (
-          <Chip ativo={filtro === SEM_CATEGORIA} onClick={() => setFiltro(SEM_CATEGORIA)} rotulo="Sem categoria" contagem={contarEm(SEM_CATEGORIA)} />
-        )}
+        <FitaDeCategorias
+          ativo={verConquistados ? '' : filtro}
+          onEscolher={setFiltro}
+          segmentos={[
+            { chave: 'todas', rotulo: 'Todas', contagem: pendentes.length },
+            ...categorias.map(c => ({
+              chave: c.id, rotulo: c.name, cor: c.color, icone: c.icon, contagem: contarEm(c.id),
+            })),
+            // "Sem categoria" só existe quando existe item sem categoria —
+            // era assim antes e continua.
+            ...(pendentes.some(i => !i.categoryId)
+              ? [{ chave: SEM_CATEGORIA, rotulo: 'Sem categoria', contagem: contarEm(SEM_CATEGORIA) }]
+              : []),
+          ]}
+        />
 
-        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-
+        {/* "Conquistados" fica FORA da fita: não é uma categoria, é um modo
+            de ver a mesma lista. Dentro dela, pareceria mais uma prateleira. */}
         <Chip
           ativo={verConquistados}
           onClick={() => setFiltro(verConquistados ? 'todas' : CONQUISTADOS)}
@@ -526,23 +527,15 @@ export default function ShoppingPage() {
           {/* Categoria em chips: o <select> nativo abria o menu do sistema
               e ignorava a fonte, a cor e os cantos do resto do app. */}
           <Campo rotulo="Categoria">
-            <div className="flex flex-wrap gap-2">
-              <ChipCat
-                ativo={!form.categoryId}
-                onClick={() => setForm(f => ({ ...f, categoryId: '' }))}
-                rotulo="Sem categoria"
-                prefixo={<Ban size={13} />}
+            <div className="flex flex-wrap items-center gap-2">
+              <FitaDeCategorias
+                ativo={form.categoryId || SEM_CATEGORIA}
+                onEscolher={ch => setForm(f => ({ ...f, categoryId: ch === SEM_CATEGORIA ? '' : ch }))}
+                segmentos={[
+                  { chave: SEM_CATEGORIA, rotulo: 'Sem categoria' },
+                  ...categorias.map(c => ({ chave: c.id, rotulo: c.name, cor: c.color, icone: c.icon })),
+                ]}
               />
-              {categorias.map(c => (
-                <ChipCat
-                  key={c.id}
-                  ativo={form.categoryId === c.id}
-                  onClick={() => setForm(f => ({ ...f, categoryId: c.id }))}
-                  rotulo={c.name}
-                  cor={c.color}
-                  prefixo={<HabitIcon name={c.icon} size={13} color={form.categoryId === c.id ? (c.color ?? CORES[0]) : 'var(--color-text-muted)'} />}
-                />
-              ))}
               <button
                 type="button"
                 onClick={() => { setCatForm({ id: '', name: '', icon: 'target', color: CORES[0] }); setCatAberta(true); }}
