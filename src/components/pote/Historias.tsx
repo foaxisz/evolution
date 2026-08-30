@@ -71,7 +71,6 @@ export default function Historias() {
   const [historias, setHistorias] = useState<Historia[]>(() => getHistorias());
   const [texto, setTexto] = useState('');
   const [editando, setEditando] = useState<{ id: string; texto: string } | null>(null);
-  const [excluir, setExcluir] = useState<string | null>(null);
   const [mes, setMes] = useState<string | null>(null);
   const [baixou, setBaixou] = useState(false);
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -204,19 +203,19 @@ export default function Historias() {
         >
           {grupos.map(g => (
             <div key={g.dia} className="mb-2 last:mb-0">
-              {g.itens.map((h, i) => (
+              {g.itens.map(h => (
                 <div
                   key={h.id}
                   className="group mb-1.5 rounded-[3px] border-solid px-3.5 py-3 last:mb-0"
                   style={{ borderWidth: 1, borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-card)' }}
                 >
-                  {/* A data aparece uma vez por dia, no primeiro quadro —
-                      repeti-la em cada entrada do mesmo dia seria ruído. */}
-                  {i === 0 && (
-                    <p className="font-arcade mb-2 text-[0.45rem] uppercase leading-none text-accent">
-                      {formatarData(g.dia, "d 'de' MMMM", g.dia)}
-                    </p>
-                  )}
+                  {/* A data em TODO quadro, inclusive no segundo do mesmo
+                      dia. Mostrá-la só no primeiro economizava uma linha e
+                      deixava a entrada seguinte flutuando sem âncora — cada
+                      quadro é um momento e cada momento tem quando. */}
+                  <p className="font-arcade mb-2 text-[0.45rem] uppercase leading-none text-accent">
+                    {formatarData(g.dia, "d 'de' MMMM", g.dia)}
+                  </p>
 
                   {editando?.id === h.id ? (
                     <div className="flex items-end gap-2">
@@ -250,7 +249,10 @@ export default function Historias() {
                           <Pencil size={12} />
                         </button>
                         <button
-                          onClick={() => setExcluir(h.id)}
+                          /* Apaga direto, sem perguntar — pedido explícito.
+                             Não há como desfazer: uma história removida some
+                             de vez. */
+                          onClick={() => { deleteHistoria(h.id); recarregar(); }}
                           title="Remover"
                           className="rounded p-1 text-text-muted transition-colors hover:text-danger"
                         >
@@ -260,25 +262,6 @@ export default function Historias() {
                     </div>
                   )}
 
-                  {/* Confirmação no próprio quadro: uma janela para apagar uma
-                      frase é desproporcional, mas apagar sem perguntar também —
-                      e aqui não há como desfazer. */}
-                  {excluir === h.id && (
-                    <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-border pt-2.5">
-                      <span className="text-[11px] text-text-muted">Remover esta história?</span>
-                      <div className="flex gap-3">
-                        <button onClick={() => setExcluir(null)} className="text-[11px] text-text-muted hover:text-text-primary">
-                          Cancelar
-                        </button>
-                        <button
-                          onClick={() => { deleteHistoria(h.id); setExcluir(null); recarregar(); }}
-                          className="text-[11px] font-semibold text-danger hover:brightness-125"
-                        >
-                          Remover
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
