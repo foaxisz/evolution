@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Play, Pause, Square } from 'lucide-react';
 import type { FocoEmAndamento, Action, CategoriaDeFoco } from '../../types';
@@ -49,10 +49,26 @@ export default function TelaCheiaDeFoco({
   const [montada, setMontada] = useState(aberta);
   const [saindo, setSaindo] = useState(false);
 
+  /*
+   * Já nasceu aberta? Então não está ABRINDO — está voltando.
+   *
+   * O app remonta a página inteira quando a sincronização traz novidade
+   * (`<div key={versao}>` no App). Sair e voltar ao aplicativo dispara um
+   * ciclo, e com ele a cabine remontava tocando a animação de entrada de
+   * novo — parecia que a tela cheia piscava para fora e voltava.
+   *
+   * Animação de entrada é para quem está entrando. Quem já estava dentro
+   * antes do remonte só precisa continuar lá.
+   */
+  const voltandoDeRemonte = useRef(aberta);
+
   // Mantém montada durante a saída — desmontar no mesmo quadro faria a
   // cabine sumir de estalo, sem animação nenhuma.
   useEffect(() => {
     if (aberta) { setMontada(true); setSaindo(false); return; }
+    // Fechou de verdade: a partir daqui, reabrir volta a ser uma entrada e
+    // merece a animação.
+    voltandoDeRemonte.current = false;
     if (!montada) return;
     setSaindo(true);
     const t = window.setTimeout(() => { setMontada(false); setSaindo(false); }, 220);
@@ -91,7 +107,9 @@ export default function TelaCheiaDeFoco({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[120] rolagem-limpa bg-bg-primary ${saindo ? 'cabine-saindo' : 'cabine-entrando'}`}
+      className={`fixed inset-0 z-[120] rolagem-limpa bg-bg-primary ${
+        saindo ? 'cabine-saindo' : voltandoDeRemonte.current ? '' : 'cabine-entrando'
+      }`}
     >
       {/* Brilho de fósforo na cor da frente */}
       <div
