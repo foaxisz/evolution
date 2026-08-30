@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Cookie, Trash2, Plus, Search, X, Pencil, HandMetal } from 'lucide-react';
-import { parseISO } from 'date-fns';
+import { Cookie, Trash2, Plus, Search, X, Pencil } from 'lucide-react';
 import {
   getCookieJarEntries,
   addCookieJarEntry,
@@ -8,7 +7,7 @@ import {
   deleteCookieJarEntry,
 } from '../store';
 import type { CookieJarEntry } from '../types';
-import { hojeISO as todayISO, formatarData, desdeQuando } from '../lib/data';
+import { hojeISO as todayISO, formatarData } from '../lib/data';
 import Modal from '../components/ui/Modal';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -29,36 +28,6 @@ function formatMonthHeader(monthKey: string): string {
   const label = formatarData(`${monthKey}-01`, "MMMM 'de' yyyy", '');
   if (!label) return 'Sem data';
   return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-/**
- * Sorteio com peso na idade. Uniforme não serve para o que o pote é: o
- * biscoito de ontem você ainda lembra, o de um ano atrás é o que bate
- * forte. Peso = 1 + dias/60, então um registro de um ano sai ~7x mais que
- * o de hoje. `evitar` impede repetir o que acabou de sair — e se todos
- * estiverem na lista de evitados, volta a considerar o pote inteiro, o
- * que mantém o sorteio de um pote com um biscoito só funcionando.
- */
-function sortear(entries: CookieJarEntry[], evitar: string[]): CookieJarEntry | null {
-  if (entries.length === 0) return null;
-
-  const candidatos = entries.filter(e => !evitar.includes(e.id));
-  const pool = candidatos.length > 0 ? candidatos : entries;
-
-  const agora = Date.now();
-  const pesos = pool.map(e => {
-    const t = parseISO(e.date).getTime();
-    const dias = Number.isNaN(t) ? 0 : Math.max(0, (agora - t) / 86_400_000);
-    return 1 + dias / 60;
-  });
-
-  const total = pesos.reduce((s, p) => s + p, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < pool.length; i++) {
-    r -= pesos[i];
-    if (r <= 0) return pool[i];
-  }
-  return pool[pool.length - 1];
 }
 
 interface FormEdicao {
@@ -91,21 +60,9 @@ export default function CookieJarPage() {
   const [deleteTarget, setDeleteTarget] = useState<CookieJarEntry | null>(null);
   const [edicao, setEdicao] = useState<FormEdicao | null>(null);
 
-  /** biscoito sorteado no momento */
-  const [sorteado, setSorteado] = useState<CookieJarEntry | null>(null);
-  /** ids sorteados recentemente, para não repetir em sequência */
-  const ultimos = useRef<string[]>([]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  function puxarBiscoito() {
-    // Evita no máximo os últimos 3, e nunca mais do que o pote comporta.
-    const limite = Math.min(3, Math.max(0, entries.length - 1));
-    const escolhido = sortear(entries, ultimos.current.slice(0, limite));
-    if (!escolhido) return;
-    ultimos.current = [escolhido.id, ...ultimos.current.filter(id => id !== escolhido.id)].slice(0, 3);
-    setSorteado(escolhido);
-  }
 
   function handleAdd() {
     const desc = description.trim();
@@ -168,45 +125,45 @@ export default function CookieJarPage() {
   const filtrando = !!termo || !!catFiltro;
 
   return (
-    <div className="tube-amber mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 md:p-6 lg:p-8 animate-fade-in">
-      {/* Cabeçalho */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    /* Sem `tube-amber`: a aba usa o roxo do resto do app.
+     *
+     * O âmbar vinha de quando o pote era a única coisa aqui. Agora ele divide
+     * a aba com as Histórias, e um mundo dourado que muda de assunto na
+     * segunda sub-aba não é identidade, é inconsistência. */
+    <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 md:p-6 lg:p-8 animate-fade-in">
+      {/* Cabeçalho: título, frase e a BUSCA na mesma linha.
+          Saiu o ícone numa caixa com borda — ele repetia em desenho o que o
+          título já dizia em palavra, e ocupava a altura de duas linhas para
+          isso. E saiu o "Pegar um biscoito": a busca é mais útil no lugar
+          dele, e agora aparece sempre em vez de só depois de três entradas. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="mb-1.5 flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl border"
-              style={{
-                backgroundColor: 'var(--color-cookie-bg)',
-                borderColor: 'color-mix(in oklab, var(--color-accent) 30%, transparent)',
-              }}
-            >
-              <Cookie size={20} style={{ color: 'var(--color-cookie)' }} />
-            </div>
-            <h1 className="text-2xl font-bold text-text-primary">Pote de Biscoitos</h1>
-          </div>
-          {/* O pote guarda o que vale relembrar: tanto o que custou e você
-              fez assim mesmo, quanto o dia em que algo deu certo. Os dois
-              servem para a mesma coisa — consultar quando bater a dúvida.
-              A frase dizia só "coisas difíceis que você já superou", e isso
-              deixava metade do pote de fora. */}
-          <p className="text-sm text-text-secondary">
+          <h1 className="text-2xl font-bold text-text-primary">Pote de Biscoitos</h1>
+          <p className="mt-1 text-sm text-text-secondary">
             Quando bater a dúvida, enfie a mão aqui.
           </p>
         </div>
 
         {entries.length > 0 && (
-          <button
-            onClick={puxarBiscoito}
-            className="flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-[filter] duration-150 hover:brightness-110"
-            style={{
-              backgroundColor: 'var(--color-cookie)',
-              color: 'var(--color-bg-primary)',
-              boxShadow: '0 4px 18px color-mix(in oklab, var(--color-cookie) 35%, transparent)',
-            }}
-          >
-            <HandMetal size={16} />
-            Pegar um biscoito
-          </button>
+          <div className="relative w-full flex-shrink-0 sm:w-56">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              type="text"
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar no pote…"
+              className="entrada pl-9"
+            />
+            {busca && (
+              <button
+                onClick={() => setBusca('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors hover:text-text-primary"
+                aria-label="Limpar busca"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -221,8 +178,8 @@ export default function CookieJarPage() {
               onClick={() => setVista(chave)}
               className="font-arcade -mb-px border-b-2 px-3.5 py-2.5 text-[0.5rem] uppercase leading-none transition-colors"
               style={{
-                borderColor: on ? 'var(--color-cookie)' : 'transparent',
-                color: on ? 'var(--color-cookie)' : 'var(--color-text-muted)',
+                borderColor: on ? 'var(--color-accent)' : 'transparent',
+                color: on ? 'var(--color-accent)' : 'var(--color-text-muted)',
               }}
             >
               {rotulo}
@@ -237,7 +194,7 @@ export default function CookieJarPage() {
       <div
         className="space-y-3 rounded-2xl border p-5"
         style={{
-          backgroundColor: 'var(--color-cookie-bg)',
+          backgroundColor: 'var(--color-accent-bg)',
           borderColor: 'color-mix(in oklab, var(--color-accent) 20%, transparent)',
         }}
       >
@@ -270,7 +227,7 @@ export default function CookieJarPage() {
             onClick={handleAdd}
             disabled={!description.trim()}
             className="flex flex-shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-[opacity,filter] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-cookie)', color: 'var(--color-bg-primary)' }}
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-bg-primary)' }}
           >
             <Plus size={16} />
             Guardar
@@ -304,29 +261,11 @@ export default function CookieJarPage() {
         )}
       </div>
 
-      {/* Busca e filtro — a partir de algumas dezenas, achar um vira problema */}
-      {entries.length > 3 && (
+      {/* As categorias como filtro. A busca subiu para o cabeçalho — aqui
+          ela era invisível até haver mais de três biscoitos, justamente
+          quando ainda não fazia falta. */}
+      {entries.length > 0 && (
         <div className="space-y-3">
-          <div className="relative">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="text"
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-              placeholder="Buscar no pote…"
-              className="entrada pl-9"
-            />
-            {busca && (
-              <button
-                onClick={() => setBusca('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors hover:text-text-primary"
-                aria-label="Limpar busca"
-              >
-                <X size={15} />
-              </button>
-            )}
-          </div>
-
           {categorias.length > 0 && (
             <div className="flex flex-wrap gap-2">
               <ChipCat ativo={!catFiltro} onClick={() => setCatFiltro(null)} rotulo="Todas" contagem={entries.length} />
@@ -372,7 +311,7 @@ export default function CookieJarPage() {
               <div className="mb-5 flex items-center gap-3">
                 <h2
                   className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: 'var(--color-cookie)' }}
+                  style={{ color: 'var(--color-accent)' }}
                 >
                   {formatMonthHeader(monthKey)}
                 </h2>
@@ -416,63 +355,8 @@ export default function CookieJarPage() {
 
       </>}
 
-      {/* Os modais ficam FORA do fragmento das sub-abas: o botão de pegar um
-          biscoito vive no cabeçalho, que é comum às duas vistas. */}
+      {/* Os modais ficam FORA do fragmento das sub-abas. */}
 
-      {/* ── O saque ── */}
-      <Modal
-        isOpen={!!sorteado}
-        onClose={() => setSorteado(null)}
-        title="Você viveu isto"
-        maxWidth="max-w-lg"
-        rodape={
-          <div className="flex gap-3">
-            <button
-              onClick={() => setSorteado(null)}
-              className="flex-1 rounded-xl bg-bg-card-hover py-3 text-sm font-semibold text-text-secondary transition-colors hover:text-text-primary"
-            >
-              Fechar
-            </button>
-            <button
-              onClick={puxarBiscoito}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-[filter] hover:brightness-110"
-              style={{ backgroundColor: 'var(--color-cookie)', color: 'var(--color-bg-primary)' }}
-            >
-              <HandMetal size={15} />
-              Pegar outro
-            </button>
-          </div>
-        }
-      >
-        {sorteado && (
-          <div className="tube-amber py-2 text-center">
-            <Cookie
-              size={30}
-              className="mx-auto mb-5"
-              style={{ color: 'var(--color-cookie)', filter: 'drop-shadow(0 0 14px var(--color-cookie))' }}
-            />
-            <p className="text-lg leading-relaxed text-text-primary">{sorteado.description}</p>
-            <p className="mt-5 text-xs uppercase tracking-wider text-text-muted">
-              {formatarData(sorteado.date, "d 'de' MMMM 'de' yyyy")}
-              {' · '}
-              {desdeQuando(sorteado.date)}
-            </p>
-            {sorteado.category && (
-              <span
-                className="mt-3 inline-block rounded-full border px-2.5 py-1 text-xs"
-                style={{
-                  color: 'var(--color-cookie)',
-                  borderColor: 'color-mix(in oklab, var(--color-accent) 25%, transparent)',
-                }}
-              >
-                {sorteado.category}
-              </span>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {/* ── Editar ── */}
       <Modal
         isOpen={!!edicao}
         onClose={() => setEdicao(null)}
@@ -490,7 +374,7 @@ export default function CookieJarPage() {
               onClick={salvarEdicao}
               disabled={!edicao?.description.trim()}
               className="flex-1 rounded-xl py-3 text-sm font-semibold transition-[filter] hover:brightness-110 disabled:opacity-40"
-              style={{ backgroundColor: 'var(--color-cookie)', color: 'var(--color-bg-primary)' }}
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-bg-primary)' }}
             >
               Salvar
             </button>
@@ -570,7 +454,7 @@ function TimelineEntry({ entry, onEditar, onDelete }: TimelineEntryProps) {
     <div className="group relative">
       <div
         className="absolute -left-[1.625rem] top-4 h-2.5 w-2.5 rounded-full border-2 bg-bg-card transition-[background-color,transform] duration-150 group-hover:scale-125 group-hover:bg-cookie"
-        style={{ borderColor: 'var(--color-cookie)' }}
+        style={{ borderColor: 'var(--color-accent)' }}
       />
 
       <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg-card p-4 transition-[background-color,border-color] duration-150 group-hover:border-accent/25 group-hover:bg-accent/[0.06]">
@@ -585,7 +469,7 @@ function TimelineEntry({ entry, onEditar, onDelete }: TimelineEntryProps) {
                   className="rounded-full border px-2 py-0.5 text-xs font-medium"
                   style={{
                     backgroundColor: 'color-mix(in oklab, var(--color-accent) 12%, transparent)',
-                    color: 'var(--color-cookie)',
+                    color: 'var(--color-accent)',
                     borderColor: 'color-mix(in oklab, var(--color-accent) 20%, transparent)',
                   }}
                 >
