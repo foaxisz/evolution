@@ -259,3 +259,20 @@ export interface MetasDaSemana {
   cumpridas?: string[];
   atualizadoEm: string;
 }
+
+/**
+ * Uma história do dia — a prática de colecionar momentos.
+ *
+ * Deliberadamente separada de `CookieJarEntry`, apesar da forma parecida: o
+ * biscoito é curado e guarda o que dá força; a história é diária e guarda
+ * TUDO, inclusive o banal. Um tipo só faria as duas coisas virarem a mesma
+ * coisa, e o pote perderia o sentido.
+ */
+export interface Historia {
+  id: string;
+  /** 'YYYY-MM-DD' — o dia a que a história pertence. */
+  data: string;
+  /** Uma ou duas frases. É snippet, não texto longo. */
+  texto: string;
+  createdAt: string;
+}

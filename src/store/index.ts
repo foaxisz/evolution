@@ -1,6 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { dataISO, hojeISO, somarDias } from '../lib/data';
 import type {
+  Historia,
   Habit, HabitLog, Challenge, ChallengeLog,
   Review, CookieJarEntry, ShoppingItem, ShoppingCategory, Action, Interacao,
   SessaoDeFoco, FocoEmAndamento, CategoriaDeFoco,
@@ -961,4 +962,27 @@ export function alternarCumpridaSemana(categoriaId: string, semana: string, meta
   const feitas = new Set(atual.cumpridas ?? []);
   if (feitas.has(meta)) feitas.delete(meta); else feitas.add(meta);
   salvarMetasDaSemana(categoriaId, semana, { cumpridas: [...feitas] });
+}
+
+// ── Histórias ──
+export function getHistorias(): Historia[] {
+  return load<Historia[]>('evo_historias', []);
+}
+
+export function addHistoria(data: string, texto: string): boolean {
+  const todas = getHistorias();
+  todas.push({ id: uuid(), data, texto, createdAt: new Date().toISOString() });
+  return save('evo_historias', todas);
+}
+
+export function updateHistoria(id: string, texto: string): boolean {
+  const todas = getHistorias();
+  const i = todas.findIndex(h => h.id === id);
+  if (i < 0) return true;
+  todas[i] = { ...todas[i], texto };
+  return save('evo_historias', todas);
+}
+
+export function deleteHistoria(id: string): boolean {
+  return save('evo_historias', getHistorias().filter(h => h.id !== id));
 }

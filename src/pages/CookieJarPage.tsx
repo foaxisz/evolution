@@ -12,6 +12,7 @@ import { hojeISO as todayISO, formatarData, desdeQuando } from '../lib/data';
 import Modal from '../components/ui/Modal';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import Historias from '../components/pote/Historias';
 
 function groupByMonth(entries: CookieJarEntry[]): Array<[string, CookieJarEntry[]]> {
   const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
@@ -73,6 +74,16 @@ export default function CookieJarPage() {
     setEntries(getCookieJarEntries());
   }, []);
 
+  /** Qual sub-aba está aberta. Dados e telas separados. */
+  const [vista, setVista] = useState<'biscoitos' | 'historias'>('biscoitos');
+  /**
+   * O formulário só ocupa espaço quando está em uso.
+   *
+   * Ele era um cartão sempre aberto — textarea de três linhas, campo de
+   * categoria, botão e a dica do atalho — uns 180px empurrando os biscoitos
+   * para baixo mesmo de quem só queria ler.
+   */
+  const [escrevendo, setEscrevendo] = useState(false);
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [busca, setBusca] = useState('');
@@ -139,6 +150,10 @@ export default function CookieJarPage() {
     new Set(entries.map(e => e.category?.trim()).filter((c): c is string => !!c))
   ).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
+  /** Aberto quando está em foco ou já tem texto — fechar com texto dentro
+   *  esconderia o botão de guardar. */
+  const aberto = escrevendo || description.trim().length > 0;
+
   const termo = busca.trim().toLowerCase();
   const filtradas = entries.filter(e => {
     if (catFiltro && e.category?.trim() !== catFiltro) return false;
@@ -195,6 +210,29 @@ export default function CookieJarPage() {
         )}
       </div>
 
+      {/* Sub-abas: o pote e as histórias moram na mesma aba, mas são coisas
+          diferentes — uma é curada, a outra é diária. */}
+      <div className="flex gap-1 border-b border-border">
+        {([['biscoitos', 'Biscoitos'], ['historias', 'Histórias']] as const).map(([chave, rotulo]) => {
+          const on = vista === chave;
+          return (
+            <button
+              key={chave}
+              onClick={() => setVista(chave)}
+              className="font-arcade -mb-px border-b-2 px-3.5 py-2.5 text-[0.5rem] uppercase leading-none transition-colors"
+              style={{
+                borderColor: on ? 'var(--color-cookie)' : 'transparent',
+                color: on ? 'var(--color-cookie)' : 'var(--color-text-muted)',
+              }}
+            >
+              {rotulo}
+            </button>
+          );
+        })}
+      </div>
+
+      {vista === 'historias' ? <Historias /> : <>
+
       {/* Registrar */}
       <div
         className="space-y-3 rounded-2xl border p-5"
@@ -208,11 +246,17 @@ export default function CookieJarPage() {
           value={description}
           onChange={e => setDescription(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={() => setEscrevendo(true)}
           placeholder="O que aconteceu que vale guardar?"
-          rows={3}
+          // Uma linha fechado, três escrevendo. É a diferença entre um campo
+          // que espera e um cartão que ocupa a tela sem ser usado.
+          rows={aberto ? 3 : 1}
           className="entrada resize-none"
         />
 
+        {/* Categoria, botão e atalhos só existem quando há o que salvar. */}
+        {aberto && (
+        <>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             type="text"
@@ -252,7 +296,12 @@ export default function CookieJarPage() {
           </div>
         )}
 
+        {/* A dica só enquanto se escreve. Permanente, ela era mais uma linha
+            ocupando a tela para explicar um atalho que ninguém vai usar
+            enquanto está só lendo. */}
         <p className="text-xs text-text-muted">Ctrl+Enter para guardar rapidamente</p>
+        </>
+        )}
       </div>
 
       {/* Busca e filtro — a partir de algumas dezenas, achar um vira problema */}
@@ -364,6 +413,11 @@ export default function CookieJarPage() {
           {entries.length} biscoito{entries.length !== 1 ? 's' : ''} no pote
         </p>
       )}
+
+      </>}
+
+      {/* Os modais ficam FORA do fragmento das sub-abas: o botão de pegar um
+          biscoito vive no cabeçalho, que é comum às duas vistas. */}
 
       {/* ── O saque ── */}
       <Modal

@@ -50,6 +50,9 @@ export const CHAVES_SINCRONIZADAS = [
   'evo_foco_metas_trimestre',
   'evo_foco_metas_semana',
   'evo_destaques',
+  // Sem esta linha a história grava aqui e nunca sobe — a falha
+  // silenciosa clássica deste projeto.
+  'evo_historias',
   'evo_foco_ajustes',
 ] as const;
 
