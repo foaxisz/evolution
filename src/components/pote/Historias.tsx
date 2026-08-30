@@ -1,24 +1,66 @@
-import { useState, useRef, useCallback } from 'react';
-import { Trash2, Pencil, Check, X } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Trash2, Pencil, Check, X, Download } from 'lucide-react';
 import type { Historia } from '../../types';
 import { getHistorias, addHistoria, updateHistoria, deleteHistoria } from '../../store';
-import { sequencia, agruparPorDia, temNoDia } from '../../lib/historias';
+import {
+  sequencia, agruparPorDia, mesesComHistoria, doMes, montarCSVDeHistorias,
+} from '../../lib/historias';
+import { baixarArquivo } from '../../lib/relatorio';
 import { hojeISO, formatarData } from '../../lib/data';
+
+/**
+ * Campo de texto que cresce com o conteúdo.
+ *
+ * Uma caixa de altura fixa erra sempre: alta demais, ocupa a tela para uma
+ * frase; baixa demais, esconde o texto de quem escreveu três. Aqui ela começa
+ * numa linha e só toma o espaço que o texto pedir.
+ */
+function CampoElastico({
+  valor, aoMudar, aoTeclar, placeholder, refExterna, className, autoFocus,
+}: {
+  valor: string;
+  aoMudar: (v: string) => void;
+  aoTeclar?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+  refExterna?: React.RefObject<HTMLTextAreaElement | null>;
+  className?: string;
+  autoFocus?: boolean;
+}) {
+  const proprio = useRef<HTMLTextAreaElement>(null);
+  const campo = refExterna ?? proprio;
+
+  // Zera antes de medir: sem isso a caixa só cresce, porque `scrollHeight`
+  // de um elemento já alto devolve a altura dele, não a do conteúdo.
+  useEffect(() => {
+    const el = campo.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [valor, campo]);
+
+  return (
+    <textarea
+      ref={campo}
+      value={valor}
+      onChange={e => aoMudar(e.target.value)}
+      onKeyDown={aoTeclar}
+      placeholder={placeholder}
+      rows={1}
+      autoFocus={autoFocus}
+      className={`font-terminal w-full resize-none overflow-hidden bg-transparent text-[19px] leading-[1.3] text-text-primary placeholder:text-text-muted focus:outline-none ${className ?? ''}`}
+    />
+  );
+}
 
 /**
  * A prática de colecionar momentos — "Homework for Life", do Matthew Dicks.
  *
  * Toda noite, uma ou duas frases sobre o momento mais "história" do dia, por
- * mais banal que ele seja. É snippet, não diário: o texto curto é o que
- * sustenta a prática todo dia.
+ * mais banal que ele seja.
  *
- * ── Por que não é o Pote de Biscoitos, apesar da forma parecida ──
- *
- * O biscoito é CURADO e guarda o que dá força na dúvida. A história é DIÁRIA
- * e guarda tudo, inclusive o banal. "Andei com a cachorra na chuva de cueca
- * às 2 da manhã" é uma entrada perfeita aqui e não é um biscoito — não dá
- * força nenhuma. Fundidas, o pote encheria de banalidade e pararia de servir
- * ao que serve.
+ * Separada do Pote de Biscoitos de propósito, apesar da forma parecida: o
+ * biscoito é curado e guarda o que dá força na dúvida; a história é diária e
+ * guarda tudo, inclusive o banal.
  *
  * ── A fita ──
  *
@@ -30,14 +72,18 @@ export default function Historias() {
   const [texto, setTexto] = useState('');
   const [editando, setEditando] = useState<{ id: string; texto: string } | null>(null);
   const [excluir, setExcluir] = useState<string | null>(null);
+  const [mes, setMes] = useState<string | null>(null);
+  const [baixou, setBaixou] = useState(false);
   const campo = useRef<HTMLTextAreaElement>(null);
 
   const hoje = hojeISO();
   const recarregar = useCallback(() => setHistorias(getHistorias()), []);
 
+  // A sequência conta a vida inteira, não o mês filtrado: ela é sobre o
+  // hábito, e filtrar a vista não muda quantos dias seguidos você cumpriu.
   const dias = sequencia(historias, hoje);
-  const jaEscreveuHoje = temNoDia(historias, hoje);
-  const grupos = agruparPorDia(historias);
+  const meses = mesesComHistoria(historias);
+  const grupos = agruparPorDia(doMes(historias, mes));
 
   function guardar() {
     const t = texto.trim();
@@ -56,60 +102,96 @@ export default function Historias() {
     recarregar();
   }
 
+  function baixar() {
+    baixarArquivo(
+      montarCSVDeHistorias(doMes(historias, mes)),
+      `evolution-historias${mes ? '-' + mes : ''}.csv`,
+      'text/csv',
+    );
+    setBaixou(true);
+    window.setTimeout(() => setBaixou(false), 2000);
+  }
+
   return (
     /* `tom-padrao`: as Histórias vivem dentro da aba do Pote, que é âmbar
        por causa do `tube-amber`. Sem isto elas herdariam o dourado — e o
-       pedido foi desenho PRÓPRIO, nada herdado do pote. A classe devolve o
-       roxo do app a esta subárvore. */
+       pedido foi desenho PRÓPRIO, nada herdado do pote. */
     <div className="tom-padrao space-y-5">
 
-      {/* ── Sequência ── */}
-      <div className="flex items-baseline gap-2.5">
-        <span className="font-arcade text-[1.05rem] leading-none text-accent-light">{dias}</span>
-        <span className="font-arcade text-[0.5rem] uppercase leading-none tracking-[0.06em] text-text-muted">
-          {dias === 1 ? 'dia seguido' : 'dias seguidos'}
-        </span>
+      {/* ── Sequência, filtro e download na mesma linha ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2.5">
+          <span className="font-arcade text-[1.05rem] leading-none text-accent-light">{dias}</span>
+          <span className="font-arcade text-[0.5rem] uppercase leading-none tracking-[0.06em] text-text-muted">
+            {dias === 1 ? 'dia seguido' : 'dias seguidos'}
+          </span>
+        </div>
+
+        {historias.length > 0 && (
+          <div className="flex items-center gap-2">
+            <select
+              value={mes ?? ''}
+              onChange={e => setMes(e.target.value || null)}
+              aria-label="Filtrar por mês"
+              className="font-arcade rounded-[3px] border-solid bg-bg-input px-2.5 py-2 text-[0.5rem] uppercase leading-none text-text-secondary focus:outline-none"
+              style={{ borderWidth: 1, borderColor: 'var(--color-border)' }}
+            >
+              <option value="">Tudo</option>
+              {meses.map(m => (
+                <option key={m} value={m}>{formatarData(`${m}-01`, "MMM 'de' yy", m)}</option>
+              ))}
+            </select>
+
+            <button
+              onClick={baixar}
+              aria-label="Baixar as histórias (.csv)"
+              title="Baixar as histórias (.csv)"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[3px] border-solid transition-colors"
+              style={{
+                borderWidth: 1,
+                borderColor: 'var(--color-border)',
+                color: baixou ? 'var(--color-accent)' : 'var(--color-text-muted)',
+              }}
+            >
+              {baixou ? <Check size={14} /> : <Download size={14} />}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── O campo de hoje ── */}
       <div
-        className="rounded-md border-solid p-3.5"
+        className="rounded-md border-solid px-3.5 py-3"
         style={{ borderWidth: 1, borderColor: 'var(--color-border-light)', backgroundColor: 'var(--color-bg-input)' }}
       >
-        <textarea
-          ref={campo}
-          value={texto}
-          onChange={e => setTexto(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardar(); } }}
-          placeholder={jaEscreveuHoje
-            ? 'aconteceu mais alguma coisa hoje?'
-            : 'qual foi o momento de hoje?'}
-          rows={2}
-          className="font-terminal w-full resize-none bg-transparent text-[19px] leading-[1.3] text-text-primary placeholder:text-text-muted focus:outline-none"
-        />
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-text-muted">
-            {texto.trim() ? 'Ctrl+Enter para guardar' : 'uma ou duas frases bastam'}
-          </span>
-          <button
-            onClick={guardar}
-            disabled={!texto.trim()}
-            className="font-arcade flex-shrink-0 rounded-[3px] px-3 py-2 text-[0.5rem] uppercase leading-none transition-opacity disabled:opacity-30"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-bg-primary)' }}
-          >
-            Guardar
-          </button>
+        <div className="flex items-end gap-3">
+          <CampoElastico
+            refExterna={campo}
+            valor={texto}
+            aoMudar={setTexto}
+            aoTeclar={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardar(); } }}
+            placeholder="uma história de 5 minutos de hoje"
+          />
+          {/* O botão só existe quando há o que guardar: vazio, ele é um
+              convite para clicar em nada. */}
+          {texto.trim() && (
+            <button
+              onClick={guardar}
+              className="font-arcade flex-shrink-0 rounded-[3px] px-3 py-2 text-[0.5rem] uppercase leading-none"
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-bg-primary)' }}
+            >
+              Guardar
+            </button>
+          )}
         </div>
       </div>
 
       {/* ── A fita ── */}
       {grupos.length === 0 ? (
         <p className="py-6 text-center text-xs leading-relaxed text-text-muted">
-          Nada guardado ainda. Toda noite, pergunte-se qual foi o momento mais
-          marcante do dia — por mais banal que pareça — e escreva uma frase.
-          <br />
-          Em algumas semanas você vai começar a enxergar momentos onde antes
-          só havia rotina.
+          {historias.length === 0
+            ? 'Nada guardado ainda. Toda noite, pergunte-se qual foi o momento mais marcante do dia — por mais banal que pareça — e escreva uma frase. Em algumas semanas você vai começar a enxergar momentos onde antes só havia rotina.'
+            : 'Nenhuma história neste mês.'}
         </p>
       ) : (
         /* As perfurações da fita: pontilhado nas duas laterais. */
@@ -137,29 +219,28 @@ export default function Historias() {
                   )}
 
                   {editando?.id === h.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editando.texto}
-                        onChange={e => setEditando({ ...editando, texto: e.target.value })}
-                        rows={2}
+                    <div className="flex items-end gap-2">
+                      <CampoElastico
+                        valor={editando.texto}
+                        aoMudar={t => setEditando({ ...editando, texto: t })}
+                        aoTeclar={e => {
+                          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); salvarEdicao(); }
+                          if (e.key === 'Escape') setEditando(null);
+                        }}
                         autoFocus
-                        className="font-terminal w-full resize-none bg-transparent text-[19px] leading-[1.25] text-text-primary focus:outline-none"
                       />
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => setEditando(null)} title="Cancelar" className="rounded p-1.5 text-text-muted hover:text-text-primary">
-                          <X size={13} />
-                        </button>
-                        <button onClick={salvarEdicao} title="Salvar" className="rounded p-1.5 text-accent-light hover:text-accent">
-                          <Check size={13} />
-                        </button>
-                      </div>
+                      <button onClick={() => setEditando(null)} title="Cancelar" className="flex-shrink-0 rounded p-1.5 text-text-muted hover:text-text-primary">
+                        <X size={13} />
+                      </button>
+                      <button onClick={salvarEdicao} title="Salvar" className="flex-shrink-0 rounded p-1.5 text-accent-light hover:text-accent">
+                        <Check size={13} />
+                      </button>
                     </div>
                   ) : (
                     <div className="flex items-start gap-3">
-                      <p className="font-terminal min-w-0 flex-1 whitespace-pre-wrap text-[19px] leading-[1.25] text-text-primary">
+                      <p className="font-terminal min-w-0 flex-1 whitespace-pre-wrap text-[19px] leading-[1.3] text-text-primary">
                         {h.texto}
                       </p>
-                      {/* Sempre visíveis no celular, onde não existe hover. */}
                       <div className="flex flex-shrink-0 gap-0.5 opacity-40 transition-opacity group-hover:opacity-100">
                         <button
                           onClick={() => setEditando({ id: h.id, texto: h.texto })}
@@ -169,7 +250,7 @@ export default function Historias() {
                           <Pencil size={12} />
                         </button>
                         <button
-                          onClick={() => setExcluir(excluir === h.id ? null : h.id)}
+                          onClick={() => setExcluir(h.id)}
                           title="Remover"
                           className="rounded p-1 text-text-muted transition-colors hover:text-danger"
                         >
@@ -180,17 +261,18 @@ export default function Historias() {
                   )}
 
                   {/* Confirmação no próprio quadro: uma janela para apagar uma
-                      frase é desproporcional, mas apagar sem perguntar também. */}
+                      frase é desproporcional, mas apagar sem perguntar também —
+                      e aqui não há como desfazer. */}
                   {excluir === h.id && (
                     <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-border pt-2.5">
                       <span className="text-[11px] text-text-muted">Remover esta história?</span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-3">
                         <button onClick={() => setExcluir(null)} className="text-[11px] text-text-muted hover:text-text-primary">
                           Cancelar
                         </button>
                         <button
                           onClick={() => { deleteHistoria(h.id); setExcluir(null); recarregar(); }}
-                          className="text-[11px] text-danger hover:brightness-125"
+                          className="text-[11px] font-semibold text-danger hover:brightness-125"
                         >
                           Remover
                         </button>

@@ -1,4 +1,7 @@
-import { sequencia, agruparPorDia, somarDias, temNoDia } from '../src/lib/historias.ts';
+import {
+  sequencia, agruparPorDia, somarDias, temNoDia,
+  mesesComHistoria, doMes, montarCSVDeHistorias,
+} from '../src/lib/historias.ts';
 
 /**
  * Testes da aba Histórias.
@@ -80,6 +83,49 @@ console.log('\nAgrupamento por dia:');
 console.log('\nTem entrada no dia:');
 ok('hoje ainda vazio', temNoDia(h('2026-08-29'), HOJE), false);
 ok('hoje preenchido', temNoDia(h(HOJE), HOJE), true);
+
+console.log('\nMeses e filtro:');
+{
+  const lista = [
+    { data: '2026-08-30', texto: 'a' },
+    { data: '2026-08-02', texto: 'b' },
+    { data: '2026-06-15', texto: 'c' },
+  ];
+  ok('meses do mais novo para o mais velho', mesesComHistoria(lista), ['2026-08', '2026-06']);
+  ok('mês repetido aparece uma vez', mesesComHistoria(lista).length, 2);
+  ok('lista vazia não tem mês', mesesComHistoria([]), []);
+  ok('filtra por mês', doMes(lista, '2026-08').map(h => h.texto), ['a', 'b']);
+  ok('mês sem nada devolve vazio', doMes(lista, '2026-01'), []);
+  ok('null devolve tudo', doMes(lista, null).length, 3);
+  ok('não muda o array recebido', (() => {
+    const orig = [...lista];
+    doMes(lista, null).sort();
+    return orig.map(h => h.texto);
+  })(), ['a', 'b', 'c']);
+}
+
+console.log('\nPlanilha:');
+{
+  const lista = [
+    { data: '2026-08-30', texto: 'mais nova' },
+    { data: '2026-06-15', texto: 'mais velha' },
+  ];
+  const csv = montarCSVDeHistorias(lista).split('\n');
+  ok('cabeçalho', csv[0], 'Data;História');
+  ok('ordem CRESCENTE, ao contrário da tela', csv.slice(1).map(l => l.split(';')[1]),
+    ['mais velha', 'mais nova']);
+  ok('separador é ponto e vírgula (Excel em pt-BR)', csv[1].includes(';'), true);
+
+  const comAspas = montarCSVDeHistorias([{ data: '2026-08-30', texto: 'ele disse "oi"; e saiu' }]);
+  ok('escapa aspas e separador', comAspas.split('\n')[1],
+    '2026-08-30;"ele disse ""oi""; e saiu"');
+
+  const comQuebra = montarCSVDeHistorias([{ data: '2026-08-30', texto: 'linha1\nlinha2' }]);
+  ok('texto com quebra de linha vira campo entre aspas',
+    comQuebra.includes('"linha1\nlinha2"'), true);
+
+  ok('lista vazia ainda tem cabeçalho', montarCSVDeHistorias([]), 'Data;História');
+}
 
 console.log(falhas === 0 ? '\nTodos passaram.' : `\n${falhas} falha(s).`);
 process.exit(falhas === 0 ? 0 : 1);

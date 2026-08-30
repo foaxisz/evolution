@@ -43,8 +43,26 @@ export default function CookieJarPage() {
     setEntries(getCookieJarEntries());
   }, []);
 
-  /** Qual sub-aba está aberta. Dados e telas separados. */
-  const [vista, setVista] = useState<'biscoitos' | 'historias'>('biscoitos');
+  /*
+   * Qual sub-aba está aberta — guardada FORA do React.
+   *
+   * O App envolve a página em `<div key={versao}>`, e a sincronização
+   * incrementa `versao` sempre que traz novidade: a página inteira é
+   * destruída e recriada. Guardar a sub-aba só em estado fazia ela voltar
+   * para "Biscoitos" sozinha — inclusive logo depois de guardar uma
+   * história, porque guardar é justamente o que dispara o ciclo.
+   *
+   * Não vai para `CHAVES_SINCRONIZADAS`: é preferência de tela deste
+   * aparelho, não dado. O mesmo tratamento que a cabine do foco já recebe.
+   */
+  const [vista, setVista] = useState<'biscoitos' | 'historias'>(
+    () => (localStorage.getItem('evo_pote_vista') === 'historias' ? 'historias' : 'biscoitos')
+  );
+
+  const trocarVista = useCallback((v: 'biscoitos' | 'historias') => {
+    localStorage.setItem('evo_pote_vista', v);
+    setVista(v);
+  }, []);
   /**
    * O formulário só ocupa espaço quando está em uso.
    *
@@ -134,9 +152,6 @@ export default function CookieJarPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-text-primary">Pote de Biscoitos</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Quando bater a dúvida, enfie a mão aqui.
-          </p>
         </div>
 
         {entries.length > 0 && (
@@ -170,7 +185,7 @@ export default function CookieJarPage() {
           return (
             <button
               key={chave}
-              onClick={() => setVista(chave)}
+              onClick={() => trocarVista(chave)}
               /*
                * `tom-padrao` na aba das Histórias, e não só na tela delas.
                *

@@ -88,3 +88,39 @@ export function sequencia(historias: readonly ComData[], hoje: string): number {
 export function temNoDia(historias: readonly ComData[], dia: string): boolean {
   return historias.some(h => h.data === dia);
 }
+
+/**
+ * Os meses que têm história, do mais novo para o mais velho.
+ *
+ * Só os que existem: um seletor com meses vazios faria o usuário escolher
+ * uma vista garantidamente em branco.
+ */
+export function mesesComHistoria(historias: readonly ComData[]): string[] {
+  return [...new Set(historias.map(h => h.data.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
+}
+
+/** Filtra por 'YYYY-MM'. `null` devolve tudo. */
+export function doMes<T extends ComData>(historias: readonly T[], mes: string | null): T[] {
+  return mes === null ? [...historias] : historias.filter(h => h.data.startsWith(mes));
+}
+
+/**
+ * As histórias como planilha.
+ *
+ * Ponto e vírgula, não vírgula: o Excel em português decide o separador pela
+ * configuração regional, e um CSV com vírgula abre com tudo espremido na
+ * coluna A. Mesma convenção do relatório de foco.
+ *
+ * Sai em ordem CRESCENTE, ao contrário da tela: numa planilha se lê a vida
+ * do começo para o fim, e é assim que o Dicks mantém a dele.
+ */
+export function montarCSVDeHistorias(historias: readonly (ComData & { texto: string })[]): string {
+  const campo = (v: string) =>
+    /[";\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+
+  const linhas = [...historias]
+    .sort((a, b) => a.data.localeCompare(b.data))
+    .map(h => [campo(h.data), campo(h.texto)].join(';'));
+
+  return ['Data;História', ...linhas].join('\n');
+}
