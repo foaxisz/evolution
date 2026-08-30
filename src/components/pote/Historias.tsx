@@ -57,7 +57,11 @@ export default function Historias() {
   }
 
   return (
-    <div className="space-y-5">
+    /* `tom-padrao`: as Histórias vivem dentro da aba do Pote, que é âmbar
+       por causa do `tube-amber`. Sem isto elas herdariam o dourado — e o
+       pedido foi desenho PRÓPRIO, nada herdado do pote. A classe devolve o
+       roxo do app a esta subárvore. */
+    <div className="tom-padrao space-y-5">
 
       {/* ── Sequência ── */}
       <div className="flex items-baseline gap-2.5">

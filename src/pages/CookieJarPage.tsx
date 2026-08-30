@@ -125,12 +125,7 @@ export default function CookieJarPage() {
   const filtrando = !!termo || !!catFiltro;
 
   return (
-    /* Sem `tube-amber`: a aba usa o roxo do resto do app.
-     *
-     * O âmbar vinha de quando o pote era a única coisa aqui. Agora ele divide
-     * a aba com as Histórias, e um mundo dourado que muda de assunto na
-     * segunda sub-aba não é identidade, é inconsistência. */
-    <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 md:p-6 lg:p-8 animate-fade-in">
+    <div className="tube-amber mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 md:p-6 lg:p-8 animate-fade-in">
       {/* Cabeçalho: título, frase e a BUSCA na mesma linha.
           Saiu o ícone numa caixa com borda — ele repetia em desenho o que o
           título já dizia em palavra, e ocupava a altura de duas linhas para
@@ -176,7 +171,18 @@ export default function CookieJarPage() {
             <button
               key={chave}
               onClick={() => setVista(chave)}
-              className="font-arcade -mb-px border-b-2 px-3.5 py-2.5 text-[0.5rem] uppercase leading-none transition-colors"
+              /*
+               * `tom-padrao` na aba das Histórias, e não só na tela delas.
+               *
+               * Os botões vivem dentro do `tube-amber`, então aqui
+               * `var(--color-accent)` resolve para o DOURADO — a aba saía cor
+               * de pote mesmo apontando para o roxo. A classe devolve o roxo
+               * a este botão, e aí a cor da aba anuncia o mundo para onde ela
+               * leva.
+               */
+              className={`font-arcade -mb-px border-b-2 px-3.5 py-2.5 text-[0.5rem] uppercase leading-none transition-colors ${
+                chave === 'historias' ? 'tom-padrao' : ''
+              }`}
               style={{
                 borderColor: on ? 'var(--color-accent)' : 'transparent',
                 color: on ? 'var(--color-accent)' : 'var(--color-text-muted)',
@@ -194,7 +200,7 @@ export default function CookieJarPage() {
       <div
         className="space-y-3 rounded-2xl border p-5"
         style={{
-          backgroundColor: 'var(--color-accent-bg)',
+          backgroundColor: 'var(--color-cookie-bg)',
           borderColor: 'color-mix(in oklab, var(--color-accent) 20%, transparent)',
         }}
       >
@@ -227,7 +233,7 @@ export default function CookieJarPage() {
             onClick={handleAdd}
             disabled={!description.trim()}
             className="flex flex-shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold whitespace-nowrap transition-[opacity,filter] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-bg-primary)' }}
+            style={{ backgroundColor: 'var(--color-cookie)', color: 'var(--color-bg-primary)' }}
           >
             <Plus size={16} />
             Guardar
@@ -311,7 +317,7 @@ export default function CookieJarPage() {
               <div className="mb-5 flex items-center gap-3">
                 <h2
                   className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: 'var(--color-accent)' }}
+                  style={{ color: 'var(--color-cookie)' }}
                 >
                   {formatMonthHeader(monthKey)}
                 </h2>
@@ -374,7 +380,7 @@ export default function CookieJarPage() {
               onClick={salvarEdicao}
               disabled={!edicao?.description.trim()}
               className="flex-1 rounded-xl py-3 text-sm font-semibold transition-[filter] hover:brightness-110 disabled:opacity-40"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-bg-primary)' }}
+              style={{ backgroundColor: 'var(--color-cookie)', color: 'var(--color-bg-primary)' }}
             >
               Salvar
             </button>
@@ -454,7 +460,7 @@ function TimelineEntry({ entry, onEditar, onDelete }: TimelineEntryProps) {
     <div className="group relative">
       <div
         className="absolute -left-[1.625rem] top-4 h-2.5 w-2.5 rounded-full border-2 bg-bg-card transition-[background-color,transform] duration-150 group-hover:scale-125 group-hover:bg-cookie"
-        style={{ borderColor: 'var(--color-accent)' }}
+        style={{ borderColor: 'var(--color-cookie)' }}
       />
 
       <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg-card p-4 transition-[background-color,border-color] duration-150 group-hover:border-accent/25 group-hover:bg-accent/[0.06]">

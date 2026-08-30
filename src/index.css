@@ -567,6 +567,34 @@ body {
     );
   }
 
+  /* Volta ao roxo padrão DENTRO de uma subárvore já recolorida.
+   *
+   * Existe para as Histórias, que vivem dentro da aba do Pote de Biscoitos e
+   * portanto herdariam o âmbar do `.tube-amber` — mas são outra coisa e
+   * pedem outro mundo. Cascata só sabe descer; para desfazer um tom no meio
+   * do caminho, é preciso redeclarar.
+   *
+   * Repete os valores do `@theme` de propósito: `var(--x, padrão)` não
+   * serviria, porque a variável ESTÁ definida — só que com o valor errado
+   * para este ponto da árvore. */
+  .tom-padrao {
+    --color-accent: #a855f7;
+    --color-accent-light: #c88cff;
+    --color-accent-dim: #7c3aed;
+    --color-accent-bg: rgba(168, 85, 247, 0.12);
+
+    --color-text-primary: #ece8f8;
+    --color-text-secondary: #a99cd0;
+    --color-text-muted: #8578ad;
+
+    --color-border: #2b2145;
+    --color-border-light: #3f3163;
+
+    --color-bg-card: #16112a;
+    --color-bg-card-hover: #1e1738;
+    --color-bg-input: #0f0b1c;
+  }
+
   /* Tubo âmbar — Pote de Biscoitos e Reviews.
      Funciona por cascata: as utilities do v4 compilam para var(--color-*),
      então redefinir as variáveis aqui recolore a subárvore inteira. */
