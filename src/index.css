@@ -750,6 +750,16 @@ body {
 .quadro-imersivo {
   display: flex;
   flex-direction: column;
+
+  /* A tela de desenho é o roxo mais claro do app, e não o quase-preto dos
+     campos. Uma prancheta preta engole traço fino, e o desenho é o que
+     importa aqui — o fundo tem que dar contraste, não sumir com ele.
+     Também vale para o cromado: o `--default-bg-color` do Excalidraw sai
+     daqui, para os dois nunca desencontrarem.
+
+     Está aqui e não no `@theme` porque é uma cor de UM lugar. Subir para o
+     tema faria dela mais uma opção de fundo do app inteiro. */
+  --cor-tela-quadro: #1b1436;
 }
 
 .quadro-imersivo .excalidraw {
@@ -762,35 +772,51 @@ body {
   width: 100%;
   min-height: 0;
 
-  --color-primary: var(--cor-quadro, var(--color-accent));
-  --color-primary-darker: var(--cor-quadro, var(--color-accent-dim));
-  --color-primary-darkest: var(--color-accent-dim);
-  --color-primary-light: var(--color-accent-bg);
-  --color-primary-hover: var(--color-accent-light);
-  --color-brand-hover: var(--color-accent-light);
-  --color-brand-active: var(--cor-quadro, var(--color-accent));
+  /* A ferramenta SELECIONADA é branca, com o ícone escuro por cima.
+     Antes era o roxo translúcido do app, que sobre uma ilha já roxa some —
+     dava para confundir com um botão desligado. Numa barra escura, o
+     inverso é o destaque mais forte que existe e não gasta cor nenhuma.
 
-  --island-bg-color: var(--color-bg-card);
-  --default-bg-color: var(--color-bg-input);
-  --popup-bg-color: var(--color-bg-card);
+     São as DUAS variáveis: `surface-primary-container` pinta o fundo do
+     ícone ativo e `on-primary-container` pinta o desenho dele. Trocar só a
+     segunda deixa ícone escuro sobre fundo escuro — mais invisível do que
+     estava antes. */
+  --color-surface-primary-container: var(--color-text-primary);
+  --color-on-primary-container: var(--color-bg-primary);
+  --color-primary-light: var(--color-accent-bg);
+
+  --color-primary: var(--cor-quadro, var(--color-accent-light));
+  --color-primary-darker: var(--cor-quadro, var(--color-accent));
+  --color-primary-darkest: var(--color-accent);
+  --color-primary-hover: var(--color-text-primary);
+  --color-brand-hover: var(--color-accent-light);
+  --color-brand-active: var(--cor-quadro, var(--color-accent-light));
+
+  /* A ilha fica um degrau ACIMA da tela, não junto dela: com as duas no
+     mesmo tom a barra parecia colada no fundo, e a borda fazia todo o
+     trabalho de separar. */
+  --island-bg-color: var(--color-bg-card-hover);
+  --default-bg-color: var(--cor-tela-quadro);
+  --popup-bg-color: var(--color-bg-card-hover);
   --popup-text-color: var(--color-text-primary);
-  --input-bg-color: var(--color-bg-input);
-  --input-border-color: var(--color-border);
-  --dialog-border-color: var(--color-border);
-  --sidebar-bg-color: var(--color-bg-card);
-  --sidebar-border-color: var(--color-border);
+  --input-bg-color: var(--color-bg-card);
+  --input-border-color: var(--color-border-light);
+  --dialog-border-color: var(--color-border-light);
+  --sidebar-bg-color: var(--color-bg-card-hover);
+  --sidebar-border-color: var(--color-border-light);
 
   --text-primary-color: var(--color-text-primary);
-  --color-on-surface: var(--color-text-primary);
+  /* Ícone parado no lilás, não no branco: com tudo branco a barra virava
+     um paredão de doze ícones de igual peso e nada indicava o escolhido. */
+  --color-on-surface: var(--color-text-secondary);
   --color-muted: var(--color-text-muted);
   --color-muted-darker: var(--color-text-secondary);
-  --color-surface-low: var(--color-bg-card);
-  --color-surface-mid: var(--color-bg-input);
-  --color-surface-high: var(--color-bg-card-hover);
-  --color-surface-primary-container: var(--color-accent-bg);
-  --color-border-outline: var(--color-border);
+  --color-surface-low: var(--color-bg-card-hover);
+  --color-surface-mid: var(--color-bg-card);
+  --color-surface-high: var(--color-border);
+  --color-border-outline: var(--color-border-light);
   --color-border-outline-variant: var(--color-border-light);
-  --button-hover-bg: var(--color-bg-card-hover);
+  --button-hover-bg: var(--color-border);
 
   --color-danger: var(--color-danger);
   --ui-font: 'JetBrains Mono', ui-monospace, monospace;

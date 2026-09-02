@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Grid2x2, Grid2x2X } from 'lucide-react';
 import { Excalidraw } from '@excalidraw/excalidraw';
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import '@excalidraw/excalidraw/index.css';
 import { getCenaDeQuadro, salvarCenaDeQuadro } from '../../store';
 
@@ -29,6 +28,15 @@ import { getCenaDeQuadro, salvarCenaDeQuadro } from '../../store';
 /** Espera antes de gravar. Traço à mão dispara `onChange` a cada ponto. */
 const ESPERA_MS = 700;
 
+/**
+ * A grade é preferência de quem desenha, não do quadro.
+ *
+ * Fica no `localStorage` cru e fora da sincronização, como o recolher da
+ * barra: é jeito de trabalhar, e vale para todos os quadros — quem gosta
+ * de grade gosta em todos.
+ */
+const CHAVE_GRADE = 'evo_quadro_grade';
+
 export default function QuadroLivre({
   quadroId, cor, nome, onFechar, onRenomear,
 }: {
@@ -38,29 +46,46 @@ export default function QuadroLivre({
   onFechar: () => void;
   onRenomear: (nome: string) => void;
 }) {
-  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [cheio, setCheio] = useState(false);
   const [rascunho, setRascunho] = useState<string | null>(null);
+  const [grade, setGrade] = useState(() => localStorage.getItem(CHAVE_GRADE) === '1');
   const relogio = useRef<number | null>(null);
+  const ultimos = useRef<unknown[] | null>(null);
   const inicial = useRef(getCenaDeQuadro(quadroId));
 
   const gravar = useCallback((elementos: readonly unknown[]) => {
-    if (relogio.current) window.clearTimeout(relogio.current);
+    // `deleted` fica na cena para o desfazer funcionar; no disco é peso
+    // morto que só cresce.
+    const vivos = (elementos as { isDeleted?: boolean }[]).filter(e => !e.isDeleted);
+    ultimos.current = vivos;
+
+    if (relogio.current !== null) window.clearTimeout(relogio.current);
     relogio.current = window.setTimeout(() => {
-      // `deleted` fica na cena para o desfazer funcionar; no disco é peso
-      // morto que só cresce.
-      const vivos = (elementos as { isDeleted?: boolean }[]).filter(e => !e.isDeleted);
+      relogio.current = null;
       if (!salvarCenaDeQuadro(quadroId, vivos)) setCheio(true);
     }, ESPERA_MS);
   }, [quadroId]);
 
-  // Gravação pendente não pode morrer com o componente: sair do quadro logo
-  // depois de um traço é exatamente o caso comum.
+  /*
+   * Gravação pendente não pode morrer com o componente: sair do quadro logo
+   * depois de um traço é exatamente o caso comum.
+   *
+   * Grava o que o ÚLTIMO `onChange` trouxe, e não o que a API do Excalidraw
+   * responde agora. Perguntar a ela aqui APAGAVA o quadro: no desmonte ela
+   * devolve uma lista vazia, e lista vazia é uma cena válida — o app
+   * gravava zero elemento por cima do desenho e ninguém era avisado. Trocar
+   * de aba com um retângulo na tela e voltar para encontrar a prancheta
+   * limpa era o sintoma.
+   *
+   * Só grava se houver relógio pendente. Sem isso, sair de um quadro que
+   * ninguém tocou reescreveria a cena à toa a cada visita.
+   */
   useEffect(() => () => {
-    if (relogio.current) window.clearTimeout(relogio.current);
-    const atual = api?.getSceneElements();
-    if (atual) salvarCenaDeQuadro(quadroId, [...atual]);
-  }, [api, quadroId]);
+    if (relogio.current === null) return;
+    window.clearTimeout(relogio.current);
+    relogio.current = null;
+    if (ultimos.current) salvarCenaDeQuadro(quadroId, ultimos.current);
+  }, [quadroId]);
 
   // Trava a rolagem do fundo enquanto o quadro está aberto.
   useEffect(() => {
@@ -88,9 +113,11 @@ export default function QuadroLivre({
   }
 
   return createPortal(
-    <div className="quadro-imersivo cabine-entrando fixed inset-0 z-[120] bg-bg-input">
+    <div
+      className="quadro-imersivo cabine-entrando fixed inset-0 z-[120]"
+      style={{ backgroundColor: 'var(--cor-tela-quadro)' }}
+    >
       <Excalidraw
-        excalidrawAPI={setApi}
         // "light" de propósito, num app inteiro escuro.
         //
         // O modo escuro do Excalidraw não troca as cores: ele joga um
@@ -101,12 +128,16 @@ export default function QuadroLivre({
         // `index.css`.
         theme="light"
         langCode="pt-BR"
+        gridModeEnabled={grade}
         initialData={{
           elements: (inicial.current?.elementos ?? []) as never,
           appState: {
-            // Fundo fixo e igual ao dos campos do app: a troca de fundo
-            // está desligada, então ele também é o fundo do PNG exportado.
-            viewBackgroundColor: '#0f0b1c',
+            // O mesmo roxo do `--cor-tela-quadro` no index.css. Repetido
+            // aqui porque esta cor entra na CENA — é ela que o Excalidraw
+            // pinta no canvas e no PNG exportado, e canvas não lê variável
+            // de CSS. Mudar uma sem a outra deixa a tela de um tom e o
+            // cromado de outro.
+            viewBackgroundColor: '#1b1436',
             currentItemStrokeColor: cor,
             currentItemRoughness: 0,
             currentItemFontFamily: 3,
@@ -156,6 +187,24 @@ export default function QuadroLivre({
                 {nome}
               </button>
             )}
+            <button
+              onClick={() => {
+                const v = !grade;
+                localStorage.setItem(CHAVE_GRADE, v ? '1' : '0');
+                setGrade(v);
+              }}
+              aria-label={grade ? 'Tirar o quadriculado' : 'Pôr o quadriculado'}
+              title={grade ? 'Tirar o quadriculado' : 'Pôr o quadriculado'}
+              className={[
+                'flex flex-shrink-0 items-center rounded-[3px] border-2 border-solid p-1.5 transition-colors',
+                grade
+                  ? 'border-accent-dim bg-accent/20 text-accent-light'
+                  : 'border-border bg-bg-card text-text-muted hover:text-text-primary',
+              ].join(' ')}
+            >
+              {grade ? <Grid2x2 size={14} /> : <Grid2x2X size={14} />}
+            </button>
+
             <button
               onClick={onFechar}
               aria-label="Voltar para os quadros"
