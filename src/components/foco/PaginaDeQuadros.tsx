@@ -75,15 +75,17 @@ export default function PaginaDeQuadros({
 
   const oAberto = quadros.find(q => q.id === aberto) ?? null;
 
-  // ── Um quadro aberto ──
-  if (oAberto) {
-    const livre = oAberto.tipo === 'livre';
+  const livreAberto = oAberto?.tipo === 'livre' ? oAberto : null;
+
+  // ── Um mapa aberto ──
+  //
+  // O quadro livre não entra aqui: ele é uma camada por cima da lista, no
+  // fim deste arquivo. Emoldurar tela infinita não faz sentido, e deixar a
+  // lista montada embaixo faz o fechar ser só desmontar o portal — sem
+  // navegar de volta e sem a página piscar.
+  if (oAberto && !livreAberto) {
     return (
-      <div
-        className={`mx-auto flex w-full flex-1 flex-col gap-5 p-4 md:p-6 lg:p-8 animate-fade-in ${
-          livre ? 'max-w-none' : 'max-w-6xl'
-        }`}
-      >
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 p-4 md:p-6 lg:p-8 animate-fade-in">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setAberto(null)}
@@ -118,25 +120,14 @@ export default function PaginaDeQuadros({
           )}
         </div>
 
-        {livre ? (
-          <Suspense
-            fallback={
-              <p className="py-12 text-center text-xs text-text-muted">
-                Abrindo a prancheta…
-              </p>
-            }
-          >
-            <QuadroLivre quadroId={oAberto.id} cor={cor} />
-          </Suspense>
-        ) : (
-          <MapaDoQuadro quadroId={oAberto.id} cor={cor} />
-        )}
+        <MapaDoQuadro quadroId={oAberto.id} cor={cor} />
       </div>
     );
   }
 
-  // ── Nenhum aberto: a lista ──
+  // ── A lista dos quadros, com o livre por cima quando há um aberto ──
   return (
+    <>
     <div className="mx-auto w-full max-w-4xl flex-1 space-y-5 p-4 md:p-6 lg:p-8 animate-fade-in">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -301,5 +292,18 @@ export default function PaginaDeQuadros({
         </div>
       )}
     </div>
+
+    {livreAberto && (
+      <Suspense fallback={null}>
+        <QuadroLivre
+          quadroId={livreAberto.id}
+          cor={cor}
+          nome={livreAberto.nome}
+          onFechar={() => setAberto(null)}
+          onRenomear={n => { renomearQuadro(livreAberto.id, n); recarregar(); }}
+        />
+      </Suspense>
+    )}
+    </>
   );
 }

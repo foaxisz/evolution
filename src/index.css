@@ -747,28 +747,16 @@ body {
    internas mudam de nome entre versões; as variáveis são a interface que
    eles publicam.
    ───────────────────────────────────────────────────────────── */
-.quadro-livre {
+.quadro-imersivo {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
 }
 
-.tela-do-quadro {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 460px;
-  border: 2px solid var(--color-border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.tela-do-quadro .excalidraw {
+.quadro-imersivo .excalidraw {
   /* O Excalidraw não tem altura própria: preenche o que o container der.
-     E preenche por FLEX, não por `height: 100%` — a altura daqui vem de
-     uma cadeia de `flex: 1`, que o navegador trata como indefinida na
-     hora de resolver porcentagem. O resultado é 0px: a caixa aparece
+     E preenche por FLEX, não por `height: 100%` — quando a altura do pai
+     vem de uma cadeia de `flex: 1`, o navegador a trata como indefinida
+     na hora de resolver porcentagem. O resultado é 0px: a caixa aparece
      vazia, e nada na tela denuncia o motivo. */
   flex: 1;
   width: 100%;
@@ -817,17 +805,27 @@ body {
   --shadow-island: 0 0 0 2px var(--color-border);
 }
 
-.tela-do-quadro .excalidraw .Island,
-.tela-do-quadro .excalidraw .App-menu__left,
-.tela-do-quadro .excalidraw .popover,
-.tela-do-quadro .excalidraw .dropdown-menu-container {
+.quadro-imersivo .excalidraw .Island,
+.quadro-imersivo .excalidraw .App-menu__left,
+.quadro-imersivo .excalidraw .popover,
+.quadro-imersivo .excalidraw .dropdown-menu-container {
   border: 2px solid var(--color-border);
 }
 
 /* A marca "Excalidraw" no canto e o convite de boas-vindas: ocupam o
    espaço da tela em branco, que é justamente onde se começa a desenhar. */
-.tela-do-quadro .excalidraw .welcome-screen-decor,
-.tela-do-quadro .excalidraw .layer-ui__wrapper__footer-right,
-.tela-do-quadro .excalidraw .footer-center {
+.quadro-imersivo .excalidraw .welcome-screen-decor,
+.quadro-imersivo .excalidraw .layer-ui__wrapper__footer-right,
+.quadro-imersivo .excalidraw .footer-center {
+  display: none;
+}
+
+/* A biblioteca sai junto.
+   Ela abre uma gaveta que navega o acervo público do excalidraw.com — mais
+   um dono externo para o conteúdo daqui, e do tipo que a decisão de
+   "apenas o básico" já tinha descartado. Sem ela, o canto de cima à
+   direita sobra inteiro para o nome do quadro e o botão de sair, que a
+   essa largura disputavam espaço e saíam cortados. */
+.quadro-imersivo .excalidraw .default-sidebar-trigger {
   display: none;
 }
