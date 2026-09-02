@@ -155,10 +155,26 @@ export function aplicaveis(
 export function aplicar(documento: unknown, linhas: LinhaRemota[]): unknown {
   if (linhas.length === 0) return documento;
 
-  // Documento inteiro: a linha É o documento. Excluído aqui significa que
-  // o documento foi zerado do outro lado.
+  /*
+   * Documento inteiro: a linha É o documento. Excluído aqui significa que
+   * o documento foi zerado do outro lado.
+   *
+   * Devolve o documento QUE JÁ ESTAVA AQUI quando o conteúdo é o mesmo, e
+   * não a cópia que veio do servidor. Quem chama decide "mudou?" comparando
+   * referência (`depois === antes`), e uma cópia recém-desserializada nunca
+   * é a mesma referência — mesmo idêntica byte a byte.
+   *
+   * Sem isto, todo ciclo que trazia um documento inteiro de volta era
+   * contado como mudança, e o app remontava a página inteira: quem estava
+   * dentro de um quadro era jogado para a lista de frentes a cada poucos
+   * segundos. Um registro que o próprio aparelho acabou de subir voltando
+   * igual não é novidade nenhuma.
+   */
   const inteiro = linhas.find(l => l.registro_id === DOC_INTEIRO);
-  if (inteiro) return inteiro.excluido ? null : inteiro.dados;
+  if (inteiro) {
+    if (inteiro.excluido) return null;
+    return canonico(inteiro.dados) === canonico(documento) ? documento : inteiro.dados;
+  }
 
   const atuais = ehListaComId(documento) ? documento : [];
   const porId = new Map<string, { id: string }>(atuais.map(r => [r.id, r]));

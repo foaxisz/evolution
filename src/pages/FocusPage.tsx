@@ -54,6 +54,11 @@ const ICONES = [
  *  desmonta o componente). `null` = estava no hub. */
 let ultimaFrente: string | null = null;
 
+type PaginaDaFrente = 'frente' | 'dados' | 'metas' | 'quadros';
+
+/** Última página aberta dentro da frente, pelo mesmo motivo do acima. */
+let ultimaPagina: PaginaDaFrente = 'frente';
+
 export default function FocusPage() {
   const [categorias, setCategorias] = useState<CategoriaDeFoco[]>(() => getCategoriasDeFoco());
 
@@ -361,9 +366,20 @@ function EspacoDaFrente({
   const [painelAberto, setPainelAberto] = useState(false);
   const [novaTarefa, setNovaTarefa] = useState('');
   const [historicoAberto, setHistoricoAberto] = useState(false);
-  // Uma página por vez. Com um booleano por página, abrir duas ao mesmo
-  // tempo é um estado possível que não deveria existir.
-  const [pagina, setPagina] = useState<'frente' | 'dados' | 'metas' | 'quadros'>('frente');
+  /*
+   * Uma página por vez. Com um booleano por página, abrir duas ao mesmo
+   * tempo é um estado possível que não deveria existir.
+   *
+   * Guardada fora do componente, como a frente aberta logo acima e pelo
+   * mesmo motivo: a sincronização remonta a página inteira quando traz
+   * novidade, e sem isto quem estava num quadro era devolvido à tela da
+   * frente no meio do trabalho.
+   */
+  const [pagina, definirPagina] = useState<PaginaDaFrente>(ultimaPagina);
+  const setPagina = useCallback((p: PaginaDaFrente) => {
+    ultimaPagina = p;
+    definirPagina(p);
+  }, []);
 
   // A cabine é estado salvo, não só de tela: fechar o app em tela cheia e
   // reabrir tem que devolver a tela cheia, com o mesmo bloco correndo.

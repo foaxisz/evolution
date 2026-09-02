@@ -95,6 +95,54 @@ verificar('documento local vazio recebe tudo',
 verificar('exclusão é aplicada mesmo com o id pendente aqui (não há escudo)',
   aplicar([{ id: 'a' }], [linha('a', null, true)]), []);
 
+/*
+ * Documento inteiro (`DOC_INTEIRO`): as ajustes do cronômetro, o próximo
+ * da vez nas compras — o que não é lista com `id`.
+ *
+ * O teste de identidade aqui não é preciosismo. Quem chama decide "mudou?"
+ * com `depois === antes`, e enquanto este caminho devolvia sempre a cópia
+ * do servidor, TODO ciclo que trazia um documento inteiro de volta era
+ * contado como mudança. O app remonta a página quando a sincronização
+ * muda algo, então quem estava desenhando num quadro era jogado para a
+ * lista de frentes a cada poucos segundos.
+ */
+console.log('\nDocumento inteiro:');
+verificar('conteúdo igual devolve o MESMO objeto local, não a cópia do servidor',
+  (() => {
+    const d = { minutos: 25, som: true };
+    const vinda = { colecao: 'evo_foco_ajustes', registro_id: DOC_INTEIRO,
+      dados: { minutos: 25, som: true }, excluido: false, atualizado_em: 'x' };
+    return aplicar(d, [vinda]) === d;
+  })(), true);
+verificar('ordem diferente das chaves ainda é o mesmo conteúdo',
+  (() => {
+    const d = { minutos: 25, som: true };
+    const vinda = { colecao: 'evo_foco_ajustes', registro_id: DOC_INTEIRO,
+      dados: { som: true, minutos: 25 }, excluido: false, atualizado_em: 'x' };
+    return aplicar(d, [vinda]) === d;
+  })(), true);
+verificar('conteúdo diferente é substituído',
+  aplicar({ minutos: 25 }, [{ colecao: 'c', registro_id: DOC_INTEIRO,
+    dados: { minutos: 50 }, excluido: false, atualizado_em: 'x' }]),
+  { minutos: 50 });
+verificar('documento inteiro excluído lá zera aqui',
+  aplicar({ minutos: 25 }, [{ colecao: 'c', registro_id: DOC_INTEIRO,
+    dados: null, excluido: true, atualizado_em: 'x' }]),
+  null);
+verificar('já zerado aqui, exclusão não conta como mudança',
+  (() => {
+    const vinda = { colecao: 'c', registro_id: DOC_INTEIRO, dados: null,
+      excluido: true, atualizado_em: 'x' };
+    return aplicar(null, [vinda]) === null;
+  })(), true);
+verificar('texto simples como documento inteiro também compara por conteúdo',
+  (() => {
+    const d = 'item-42';
+    const vinda = { colecao: 'evo_shopping_proximo', registro_id: DOC_INTEIRO,
+      dados: 'item-42', excluido: false, atualizado_em: 'x' };
+    return aplicar(d, [vinda]) === d;
+  })(), true);
+
 console.log('\nAnti-ressurreição no faltandoNoServidor:');
 {
   const remotos = new Map();

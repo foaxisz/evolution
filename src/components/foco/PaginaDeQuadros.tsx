@@ -17,6 +17,15 @@ import MapaDoQuadro from './MapaDoQuadro';
 const QuadroLivre = lazy(() => import('./QuadroLivre'));
 
 /**
+ * Qual quadro estava aberto, guardado fora do componente.
+ *
+ * Mesmo motivo do `ultimaFrente` na FocusPage: a sincronização remonta a
+ * página quando traz novidade, e sem isto um traço no quadro podia acabar
+ * jogando quem desenhava de volta para a lista.
+ */
+let ultimoQuadro: string | null = null;
+
+/**
  * Os quadros de uma frente de propósito.
  *
  * Lista quando nenhum está aberto; o quadro quando um está. Vários por
@@ -35,7 +44,11 @@ export default function PaginaDeQuadros({
   const [quadros, setQuadros] = useState<Quadro[]>(
     () => getQuadros().filter(q => q.categoriaId === categoria.id)
   );
-  const [aberto, setAberto] = useState<string | null>(null);
+  const [aberto, definirAberto] = useState<string | null>(ultimoQuadro);
+  const setAberto = useCallback((id: string | null) => {
+    ultimoQuadro = id;
+    definirAberto(id);
+  }, []);
   const [renomeando, setRenomeando] = useState<{ id: string; nome: string } | null>(null);
   const [excluir, setExcluir] = useState<string | null>(null);
   const [escolhendo, setEscolhendo] = useState(false);
