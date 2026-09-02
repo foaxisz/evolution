@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { dataISO, hojeISO, somarDias } from '../lib/data';
 import type {
-  Historia,
+  Historia, Quadro, NoDeQuadro,
   Habit, HabitLog, Challenge, ChallengeLog,
   Review, CookieJarEntry, ShoppingItem, ShoppingCategory, Action, Interacao,
   SessaoDeFoco, FocoEmAndamento, CategoriaDeFoco,
@@ -985,4 +985,58 @@ export function updateHistoria(id: string, texto: string): boolean {
 
 export function deleteHistoria(id: string): boolean {
   return save('evo_historias', getHistorias().filter(h => h.id !== id));
+}
+
+// ── Quadros ──
+export function getQuadros(): Quadro[] {
+  return load<Quadro[]>('evo_quadros', []);
+}
+
+export function addQuadro(categoriaId: string, nome: string): Quadro {
+  const novo: Quadro = { id: uuid(), categoriaId, nome, createdAt: new Date().toISOString() };
+  save('evo_quadros', [...getQuadros(), novo]);
+  return novo;
+}
+
+export function renomearQuadro(id: string, nome: string): void {
+  const todos = getQuadros();
+  const i = todos.findIndex(q => q.id === id);
+  if (i < 0) return;
+  todos[i] = { ...todos[i], nome };
+  save('evo_quadros', todos);
+}
+
+/** Apaga o quadro E os nós dele — nó sem quadro é lixo que só ocupa cota. */
+export function deleteQuadro(id: string): void {
+  save('evo_quadros', getQuadros().filter(q => q.id !== id));
+  save('evo_quadro_nos', getNosDeQuadro().filter(n => n.quadroId !== id));
+}
+
+export function getNosDeQuadro(quadroId?: string): NoDeQuadro[] {
+  const todos = load<NoDeQuadro[]>('evo_quadro_nos', []);
+  return quadroId === undefined ? todos : todos.filter(n => n.quadroId === quadroId);
+}
+
+export function addNoDeQuadro(
+  quadroId: string, texto: string, paiId: string | undefined, ordem: number,
+): NoDeQuadro {
+  const novo: NoDeQuadro = {
+    id: uuid(), quadroId, paiId, texto, ordem, createdAt: new Date().toISOString(),
+  };
+  save('evo_quadro_nos', [...getNosDeQuadro(), novo]);
+  return novo;
+}
+
+export function updateNoDeQuadro(id: string, texto: string): void {
+  const todos = getNosDeQuadro();
+  const i = todos.findIndex(n => n.id === id);
+  if (i < 0) return;
+  todos[i] = { ...todos[i], texto };
+  save('evo_quadro_nos', todos);
+}
+
+/** Recebe a subárvore inteira já calculada — apagar um nó apaga o galho. */
+export function deleteNosDeQuadro(ids: readonly string[]): void {
+  const fora = new Set(ids);
+  save('evo_quadro_nos', getNosDeQuadro().filter(n => !fora.has(n.id)));
 }

@@ -276,3 +276,33 @@ export interface Historia {
   texto: string;
   createdAt: string;
 }
+
+/**
+ * Um quadro de uma frente de propósito — o mapa de como se pensa aquela
+ * frente. Vários por categoria.
+ */
+export interface Quadro {
+  id: string;
+  categoriaId: string;
+  nome: string;
+  createdAt: string;
+}
+
+/**
+ * Um nó do quadro.
+ *
+ * Registro PRÓPRIO, e não aninhado dentro do `Quadro`, de propósito: a
+ * sincronização manda o registro inteiro a cada mudança. Aninhado, editar
+ * uma palavra reenviaria o quadro completo — a cada tecla, num quadro
+ * grande. Separado, editar um nó manda um nó.
+ */
+export interface NoDeQuadro {
+  id: string;
+  quadroId: string;
+  /** Ausente = raiz do mapa. */
+  paiId?: string;
+  texto: string;
+  /** Posição entre os irmãos. */
+  ordem: number;
+  createdAt: string;
+}

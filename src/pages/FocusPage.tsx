@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Play, Settings, ChartNoAxesCombined,
-  ArrowLeft, Pencil, Plus, Flag, History, X,
+  ArrowLeft, Pencil, Plus, Flag, History, X, Network,
 } from 'lucide-react';
 import {
   getActions, saveAction, updateAction, toggleAction, deleteAction,
@@ -23,6 +23,7 @@ import PainelDeMetas from '../components/foco/PainelDeMetas';
 import ModalDeTarefas from '../components/foco/ModalDeTarefas';
 import PainelDeDados from '../components/foco/PainelDeDados';
 import PaginaDeMetas from '../components/foco/PaginaDeMetas';
+import PaginaDeQuadros from '../components/foco/PaginaDeQuadros';
 import CaixaDeMarcar from '../components/foco/CaixaDeMarcar';
 import LinhaDeTarefa from '../components/foco/LinhaDeTarefa';
 import MenuDeTarefa from '../components/foco/MenuDeTarefa';
@@ -362,7 +363,7 @@ function EspacoDaFrente({
   const [historicoAberto, setHistoricoAberto] = useState(false);
   // Uma página por vez. Com um booleano por página, abrir duas ao mesmo
   // tempo é um estado possível que não deveria existir.
-  const [pagina, setPagina] = useState<'frente' | 'dados' | 'metas'>('frente');
+  const [pagina, setPagina] = useState<'frente' | 'dados' | 'metas' | 'quadros'>('frente');
 
   // A cabine é estado salvo, não só de tela: fechar o app em tela cheia e
   // reabrir tem que devolver a tela cheia, com o mesmo bloco correndo.
@@ -739,6 +740,18 @@ function EspacoDaFrente({
     );
   }
 
+  if (pagina === 'quadros') {
+    return (
+      <>
+        <PaginaDeQuadros
+          categoria={categoria}
+          onVoltar={() => setPagina('frente')}
+        />
+        {modal}
+      </>
+    );
+  }
+
   if (pagina === 'metas') {
     return (
       <>
@@ -828,6 +841,17 @@ function EspacoDaFrente({
           onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
         >
           <ChartNoAxesCombined size={16} />
+        </button>
+        <button
+          onClick={() => setPagina('quadros')}
+          aria-label="Abrir quadros"
+          title="Quadros"
+          className="botao-icone transition-colors"
+          style={{ color: 'var(--color-text-muted)' }}
+          onMouseEnter={e => { e.currentTarget.style.color = cor; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+        >
+          <Network size={16} />
         </button>
         <button
           onClick={() => setPagina('metas')}

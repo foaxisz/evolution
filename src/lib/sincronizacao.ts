@@ -53,6 +53,10 @@ export const CHAVES_SINCRONIZADAS = [
   // Sem esta linha a história grava aqui e nunca sobe — a falha
   // silenciosa clássica deste projeto.
   'evo_historias',
+  // Um registro por nó, não o quadro inteiro: é o que faz editar uma
+  // palavra mandar um nó em vez do mapa completo.
+  'evo_quadros',
+  'evo_quadro_nos',
   'evo_foco_ajustes',
 ] as const;
 
