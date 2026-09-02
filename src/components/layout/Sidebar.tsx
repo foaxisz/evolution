@@ -9,8 +9,8 @@ import {
   CheckSquare,
   Timer,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import type { Page } from '../../types';
 import Logo from '../ui/Logo';
@@ -69,30 +69,21 @@ export default function Sidebar({
       ].join(' ')}
     >
       {/* Cabeçalho: uma linha só nos dois estados, para a altura não pular.
-          Recolhida, o que fica é o botão — entre marca e controle, o
-          controle é o que se precisa alcançar. */}
+          Recolhida sobra a marca sozinha — o símbolo já é a Evolution sem
+          precisar do nome escrito ao lado. O controle de recolher não mora
+          aqui: ele fica no rodapé, longe do que se usa o tempo todo. */}
       <div
         className={[
           'flex h-[66px] flex-shrink-0 items-center border-b border-border',
           recolhida ? 'justify-center px-2' : 'gap-2.5 px-5',
         ].join(' ')}
       >
+        <Logo size={26} />
         {!recolhida && (
-          <>
-            <Logo size={26} />
-            <span className="flex-1 whitespace-nowrap text-lg font-semibold tracking-tight text-text-primary">
-              Evolution
-            </span>
-          </>
+          <span className="flex-1 whitespace-nowrap text-lg font-semibold tracking-tight text-text-primary">
+            Evolution
+          </span>
         )}
-        <button
-          onClick={onAlternarRecolhida}
-          aria-label={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
-          title={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
-          className="flex-shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-card-hover hover:text-text-primary"
-        >
-          {recolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-        </button>
       </div>
 
       {/* Navigation */}
@@ -177,6 +168,24 @@ export default function Sidebar({
             )}
           </>
         )}
+
+        {/* Recolher, na última linha de tudo.
+            Sem moldura, sem rótulo, sem cor: é ajuste de mobília, não
+            navegação, e no topo competia com o logo por atenção. A seta
+            acompanha a borda que ela empurra — encostada à direita quando
+            aberta, no meio quando é só a régua. */}
+        <button
+          onClick={onAlternarRecolhida}
+          aria-label={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
+          title={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
+          className={[
+            'mt-1 flex h-7 w-full items-center rounded-lg text-text-muted/60',
+            'transition-colors hover:bg-bg-card-hover hover:text-text-primary',
+            recolhida ? 'justify-center' : 'justify-end px-1',
+          ].join(' ')}
+        >
+          {recolhida ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
+        </button>
       </div>
     </aside>
   );
