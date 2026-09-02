@@ -1,15 +1,30 @@
-import { useState, useCallback } from 'react';
-import { ArrowLeft, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { ArrowLeft, Plus, Trash2, Pencil, Check, X, Network, Shapes } from 'lucide-react';
 import type { CategoriaDeFoco, Quadro } from '../../types';
-import { getQuadros, addQuadro, renomearQuadro, deleteQuadro, getNosDeQuadro } from '../../store';
+import {
+  getQuadros, addQuadro, renomearQuadro, deleteQuadro, getNosDeQuadro, getCenaDeQuadro,
+} from '../../store';
 import { formatarData } from '../../lib/data';
 import MapaDoQuadro from './MapaDoQuadro';
 
 /**
+ * O quadro livre carrega sob demanda.
+ *
+ * O Excalidraw são ~2,7MB de JavaScript. Preso no pacote principal, ele
+ * atrasaria a abertura do app para quem nunca desenhou nada. Assim só desce
+ * quando alguém abre um quadro livre.
+ */
+const QuadroLivre = lazy(() => import('./QuadroLivre'));
+
+/**
  * Os quadros de uma frente de propósito.
  *
- * Lista quando nenhum está aberto; o mapa quando um está. Vários por
+ * Lista quando nenhum está aberto; o quadro quando um está. Vários por
  * categoria, porque uma frente tem mais de um assunto a mapear.
+ *
+ * Dois tipos, e a escolha é na criação porque eles não se convertem: o
+ * mapa organiza sozinho e cabe em texto; o livre é tela em branco e mora
+ * em coordenadas. Virar um no outro perderia justamente o que faz cada um.
  */
 export default function PaginaDeQuadros({
   categoria, onVoltar,
@@ -23,6 +38,8 @@ export default function PaginaDeQuadros({
   const [aberto, setAberto] = useState<string | null>(null);
   const [renomeando, setRenomeando] = useState<{ id: string; nome: string } | null>(null);
   const [excluir, setExcluir] = useState<string | null>(null);
+  const [escolhendo, setEscolhendo] = useState(false);
+  const caixaDeEscolha = useRef<HTMLDivElement>(null);
 
   const cor = categoria.cor;
   const recarregar = useCallback(
@@ -30,8 +47,19 @@ export default function PaginaDeQuadros({
     [categoria.id]
   );
 
-  function criar() {
-    const novo = addQuadro(categoria.id, 'Quadro sem nome');
+  // Clique fora fecha a escolha do tipo.
+  useEffect(() => {
+    if (!escolhendo) return;
+    function aoClicar(e: MouseEvent) {
+      if (!caixaDeEscolha.current?.contains(e.target as Node)) setEscolhendo(false);
+    }
+    document.addEventListener('mousedown', aoClicar);
+    return () => document.removeEventListener('mousedown', aoClicar);
+  }, [escolhendo]);
+
+  function criar(tipo: 'mapa' | 'livre') {
+    const novo = addQuadro(categoria.id, 'Quadro sem nome', tipo);
+    setEscolhendo(false);
     recarregar();
     setAberto(novo.id);
     setRenomeando({ id: novo.id, nome: novo.nome });
@@ -47,10 +75,15 @@ export default function PaginaDeQuadros({
 
   const oAberto = quadros.find(q => q.id === aberto) ?? null;
 
-  // ── Um quadro aberto: o mapa ──
+  // ── Um quadro aberto ──
   if (oAberto) {
+    const livre = oAberto.tipo === 'livre';
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 space-y-5 p-4 md:p-6 lg:p-8 animate-fade-in">
+      <div
+        className={`mx-auto flex w-full flex-1 flex-col gap-5 p-4 md:p-6 lg:p-8 animate-fade-in ${
+          livre ? 'max-w-none' : 'max-w-6xl'
+        }`}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={() => setAberto(null)}
@@ -85,7 +118,19 @@ export default function PaginaDeQuadros({
           )}
         </div>
 
-        <MapaDoQuadro quadroId={oAberto.id} cor={cor} />
+        {livre ? (
+          <Suspense
+            fallback={
+              <p className="py-12 text-center text-xs text-text-muted">
+                Abrindo a prancheta…
+              </p>
+            }
+          >
+            <QuadroLivre quadroId={oAberto.id} cor={cor} />
+          </Suspense>
+        ) : (
+          <MapaDoQuadro quadroId={oAberto.id} cor={cor} />
+        )}
       </div>
     );
   }
@@ -105,20 +150,60 @@ export default function PaginaDeQuadros({
           <h2 className="truncate text-xl font-bold text-text-primary">Quadros</h2>
         </div>
 
-        <button
-          onClick={criar}
-          aria-label="Novo quadro"
-          title="Novo quadro"
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[3px] border-solid transition-colors"
-          style={{
-            borderWidth: 2,
-            borderColor: `color-mix(in oklab, ${cor} 55%, transparent)`,
-            backgroundColor: `color-mix(in oklab, ${cor} 16%, transparent)`,
-            color: cor,
-          }}
-        >
-          <Plus size={16} />
-        </button>
+        <div className="relative flex-shrink-0" ref={caixaDeEscolha}>
+          <button
+            onClick={() => setEscolhendo(v => !v)}
+            aria-label="Novo quadro"
+            title="Novo quadro"
+            className="flex h-9 w-9 items-center justify-center rounded-[3px] border-solid transition-colors"
+            style={{
+              borderWidth: 2,
+              borderColor: `color-mix(in oklab, ${cor} 55%, transparent)`,
+              backgroundColor: `color-mix(in oklab, ${cor} 16%, transparent)`,
+              color: cor,
+            }}
+          >
+            <Plus size={16} />
+          </button>
+
+          {/* A escolha explica cada tipo: "mapa" e "livre" só dizem alguma
+              coisa para quem já viu os dois. */}
+          {escolhendo && (
+            <div
+              className="absolute right-0 top-full z-30 mt-1.5 w-56 rounded-[4px] border-solid bg-bg-card p-1 animate-fade-in"
+              style={{ borderWidth: 2, borderColor: 'var(--color-border)' }}
+            >
+              <button
+                onClick={() => criar('mapa')}
+                className="flex w-full items-start gap-2.5 rounded-[3px] px-2.5 py-2 text-left transition-colors hover:bg-bg-input"
+              >
+                <Network size={14} className="mt-0.5 flex-shrink-0" style={{ color: cor }} />
+                <span className="min-w-0">
+                  <span className="font-arcade block text-[0.5rem] uppercase leading-none text-text-primary">
+                    Mapa
+                  </span>
+                  <span className="mt-1.5 block text-[11px] leading-snug text-text-muted">
+                    Ideias em ramos, arrumadas sozinhas
+                  </span>
+                </span>
+              </button>
+              <button
+                onClick={() => criar('livre')}
+                className="flex w-full items-start gap-2.5 rounded-[3px] px-2.5 py-2 text-left transition-colors hover:bg-bg-input"
+              >
+                <Shapes size={14} className="mt-0.5 flex-shrink-0" style={{ color: cor }} />
+                <span className="min-w-0">
+                  <span className="font-arcade block text-[0.5rem] uppercase leading-none text-text-primary">
+                    Livre
+                  </span>
+                  <span className="mt-1.5 block text-[11px] leading-snug text-text-muted">
+                    Tela infinita: desenhar, formas e setas
+                  </span>
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {quadros.length === 0 ? (
@@ -129,13 +214,24 @@ export default function PaginaDeQuadros({
       ) : (
         <div className="space-y-2">
           {quadros.map(q => {
-            const quantos = getNosDeQuadro(q.id).length;
+            const livre = q.tipo === 'livre';
+            const quantos = livre
+              ? getCenaDeQuadro(q.id)?.elementos.length ?? 0
+              : getNosDeQuadro(q.id).length;
+            const unidade = livre
+              ? (quantos === 1 ? 'traço' : 'traços')
+              : (quantos === 1 ? 'nó' : 'nós');
+
             return (
               <div
                 key={q.id}
                 className="group flex items-center gap-3 rounded-xl border-solid bg-bg-card px-4 py-3"
                 style={{ borderWidth: 2, borderColor: 'var(--color-border)' }}
               >
+                <span className="flex-shrink-0" style={{ color: `color-mix(in oklab, ${cor} 70%, var(--color-text-muted))` }}>
+                  {livre ? <Shapes size={15} /> : <Network size={15} />}
+                </span>
+
                 {renomeando?.id === q.id ? (
                   <input
                     autoFocus
@@ -155,7 +251,7 @@ export default function PaginaDeQuadros({
                       {q.nome}
                     </p>
                     <p className="mt-1 text-[11px] text-text-muted">
-                      {quantos === 0 ? 'vazio' : `${quantos} ${quantos === 1 ? 'nó' : 'nós'}`}
+                      {quantos === 0 ? 'vazio' : `${quantos} ${unidade}`}
                       {' · '}
                       {formatarData(q.createdAt.slice(0, 10), "d 'de' MMM", '')}
                     </p>

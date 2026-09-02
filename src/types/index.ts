@@ -285,7 +285,21 @@ export interface Quadro {
   id: string;
   categoriaId: string;
   nome: string;
+  /** Ausente = mapa; quadro criado antes do tipo existir. */
+  tipo?: 'mapa' | 'livre';
   createdAt: string;
+}
+
+/**
+ * A cena de um quadro livre: os elementos do Excalidraw, crus.
+ *
+ * O `id` é o id do quadro — assim cada quadro é UM registro na sincronia, e
+ * desenhar num não reescreve a cena dos outros.
+ */
+export interface CenaDeQuadro {
+  id: string;
+  elementos: unknown[];
+  atualizadoEm: string;
 }
 
 /**

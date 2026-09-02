@@ -57,6 +57,9 @@ export const CHAVES_SINCRONIZADAS = [
   // palavra mandar um nó em vez do mapa completo.
   'evo_quadros',
   'evo_quadro_nos',
+  // Uma cena por quadro, com o id do quadro: desenhar num quadro sobe um
+  // registro, não a pasta inteira.
+  'evo_quadro_cenas',
   'evo_foco_ajustes',
 ] as const;
 

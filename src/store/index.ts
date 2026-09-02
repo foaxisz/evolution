@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { dataISO, hojeISO, somarDias } from '../lib/data';
 import type {
-  Historia, Quadro, NoDeQuadro,
+  Historia, Quadro, NoDeQuadro, CenaDeQuadro,
   Habit, HabitLog, Challenge, ChallengeLog,
   Review, CookieJarEntry, ShoppingItem, ShoppingCategory, Action, Interacao,
   SessaoDeFoco, FocoEmAndamento, CategoriaDeFoco,
@@ -992,8 +992,12 @@ export function getQuadros(): Quadro[] {
   return load<Quadro[]>('evo_quadros', []);
 }
 
-export function addQuadro(categoriaId: string, nome: string): Quadro {
-  const novo: Quadro = { id: uuid(), categoriaId, nome, createdAt: new Date().toISOString() };
+export function addQuadro(
+  categoriaId: string, nome: string, tipo: 'mapa' | 'livre' = 'mapa',
+): Quadro {
+  const novo: Quadro = {
+    id: uuid(), categoriaId, nome, tipo, createdAt: new Date().toISOString(),
+  };
   save('evo_quadros', [...getQuadros(), novo]);
   return novo;
 }
@@ -1006,10 +1010,11 @@ export function renomearQuadro(id: string, nome: string): void {
   save('evo_quadros', todos);
 }
 
-/** Apaga o quadro E os nós dele — nó sem quadro é lixo que só ocupa cota. */
+/** Apaga o quadro E o que pende dele — nó e cena órfãos só ocupam cota. */
 export function deleteQuadro(id: string): void {
   save('evo_quadros', getQuadros().filter(q => q.id !== id));
   save('evo_quadro_nos', getNosDeQuadro().filter(n => n.quadroId !== id));
+  save('evo_quadro_cenas', getCenas().filter(c => c.id !== id));
 }
 
 export function getNosDeQuadro(quadroId?: string): NoDeQuadro[] {
@@ -1039,4 +1044,29 @@ export function updateNoDeQuadro(id: string, texto: string): void {
 export function deleteNosDeQuadro(ids: readonly string[]): void {
   const fora = new Set(ids);
   save('evo_quadro_nos', getNosDeQuadro().filter(n => !fora.has(n.id)));
+}
+
+// ── Cenas dos quadros livres ──
+function getCenas(): CenaDeQuadro[] {
+  return load<CenaDeQuadro[]>('evo_quadro_cenas', []);
+}
+
+export function getCenaDeQuadro(quadroId: string): CenaDeQuadro | null {
+  return getCenas().find(c => c.id === quadroId) ?? null;
+}
+
+/**
+ * Grava a cena de um quadro livre.
+ *
+ * Devolve `false` quando a cota estourou — o desenho continua na tela, mas
+ * não foi para o disco, e quem chama precisa avisar. Cena é o único dado
+ * deste app que cresce sem teto: cada traço à mão leva a lista de pontos
+ * inteira.
+ */
+export function salvarCenaDeQuadro(quadroId: string, elementos: unknown[]): boolean {
+  const outras = getCenas().filter(c => c.id !== quadroId);
+  const cena: CenaDeQuadro = {
+    id: quadroId, elementos, atualizadoEm: new Date().toISOString(),
+  };
+  return save('evo_quadro_cenas', [...outras, cena]);
 }

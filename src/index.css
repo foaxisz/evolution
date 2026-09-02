@@ -734,3 +734,100 @@ body {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Quadro livre — o Excalidraw vestido com a roupa do app.
+
+   Ele traz o próprio tema escuro, que é cinza-azulado; aqui tudo é roxo
+   sobre quase-preto, e cinza no meio do roxo aparece como sujeira. Por
+   isso redeclaramos as variáveis dele com as nossas: é a mesma manobra
+   que `.tube-amber` e `.tom-padrao` fazem nas outras abas.
+
+   Redeclarar variável é o único jeito estável de mexer nisto. As classes
+   internas mudam de nome entre versões; as variáveis são a interface que
+   eles publicam.
+   ───────────────────────────────────────────────────────────── */
+.quadro-livre {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tela-do-quadro {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 460px;
+  border: 2px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.tela-do-quadro .excalidraw {
+  /* O Excalidraw não tem altura própria: preenche o que o container der.
+     E preenche por FLEX, não por `height: 100%` — a altura daqui vem de
+     uma cadeia de `flex: 1`, que o navegador trata como indefinida na
+     hora de resolver porcentagem. O resultado é 0px: a caixa aparece
+     vazia, e nada na tela denuncia o motivo. */
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+
+  --color-primary: var(--cor-quadro, var(--color-accent));
+  --color-primary-darker: var(--cor-quadro, var(--color-accent-dim));
+  --color-primary-darkest: var(--color-accent-dim);
+  --color-primary-light: var(--color-accent-bg);
+  --color-primary-hover: var(--color-accent-light);
+  --color-brand-hover: var(--color-accent-light);
+  --color-brand-active: var(--cor-quadro, var(--color-accent));
+
+  --island-bg-color: var(--color-bg-card);
+  --default-bg-color: var(--color-bg-input);
+  --popup-bg-color: var(--color-bg-card);
+  --popup-text-color: var(--color-text-primary);
+  --input-bg-color: var(--color-bg-input);
+  --input-border-color: var(--color-border);
+  --dialog-border-color: var(--color-border);
+  --sidebar-bg-color: var(--color-bg-card);
+  --sidebar-border-color: var(--color-border);
+
+  --text-primary-color: var(--color-text-primary);
+  --color-on-surface: var(--color-text-primary);
+  --color-muted: var(--color-text-muted);
+  --color-muted-darker: var(--color-text-secondary);
+  --color-surface-low: var(--color-bg-card);
+  --color-surface-mid: var(--color-bg-input);
+  --color-surface-high: var(--color-bg-card-hover);
+  --color-surface-primary-container: var(--color-accent-bg);
+  --color-border-outline: var(--color-border);
+  --color-border-outline-variant: var(--color-border-light);
+  --button-hover-bg: var(--color-bg-card-hover);
+
+  --color-danger: var(--color-danger);
+  --ui-font: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Cantos de 3px, como o resto do app. A ilha arredondada do Excalidraw
+     é a marca visual mais forte dele — sem isto, continua parecendo outro
+     programa aberto dentro deste. */
+  --border-radius-lg: 4px;
+  --border-radius-md: 3px;
+
+  /* A sombra grande da ilha some: aqui o que separa camada é borda. */
+  --shadow-island: 0 0 0 2px var(--color-border);
+}
+
+.tela-do-quadro .excalidraw .Island,
+.tela-do-quadro .excalidraw .App-menu__left,
+.tela-do-quadro .excalidraw .popover,
+.tela-do-quadro .excalidraw .dropdown-menu-container {
+  border: 2px solid var(--color-border);
+}
+
+/* A marca "Excalidraw" no canto e o convite de boas-vindas: ocupam o
+   espaço da tela em branco, que é justamente onde se começa a desenhar. */
+.tela-do-quadro .excalidraw .welcome-screen-decor,
+.tela-do-quadro .excalidraw .layer-ui__wrapper__footer-right,
+.tela-do-quadro .excalidraw .footer-center {
+  display: none;
+}

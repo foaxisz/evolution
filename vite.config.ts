@@ -38,11 +38,35 @@ export default defineConfig({
       },
 
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // As fontes vêm do Google e são o único recurso externo do app.
-        // Sem cache, abrir offline mostraria o texto na fonte de sistema —
-        // o que, num app cuja identidade É a tipografia, parece quebrado.
+        // O precache é a CASCA do app, e só ela.
+        //
+        // Listar `**/*.js` traria junto os ~8MB do Excalidraw — locales,
+        // fontes e o motor de desenho inteiro — e todo mundo baixaria isso
+        // na instalação, inclusive quem nunca vai abrir um quadro livre.
+        // Ele desce sob demanda e fica no cache de execução, logo abaixo.
+        globPatterns: [
+          '**/*.{css,html,svg,png,ico,webmanifest}',
+          'assets/index-*.js',
+          'assets/workbox-window*.js',
+          'registerSW.js',
+        ],
         runtimeCaching: [
+          {
+            // O resto dos pedaços do próprio app. O nome carrega o hash do
+            // conteúdo, então CacheFirst nunca serve versão velha: build
+            // novo = nome novo = pedido novo.
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin && url.pathname.startsWith('/assets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'pedacos-do-app',
+              expiration: { maxEntries: 220, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // As fontes vêm do Google e são o único recurso externo do app.
+          // Sem cache, abrir offline mostraria o texto na fonte de sistema —
+          // o que, num app cuja identidade É a tipografia, parece quebrado.
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
             handler: 'StaleWhileRevalidate',
