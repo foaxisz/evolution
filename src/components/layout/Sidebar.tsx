@@ -87,7 +87,10 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className={`rolagem-limpa flex-1 py-3 ${recolhida ? 'px-2' : 'px-3'}`}>
+      {/* `min-h-0` faz a lista ENCOLHER e rolar em janela baixa. Sem ele, o
+          tamanho mínimo de um item flex é o do conteúdo: a lista empurrava
+          o rodapé para fora da tela e o "Sair" ficava inalcançável. */}
+      <nav className={`rolagem-limpa min-h-0 flex-1 py-3 ${recolhida ? 'px-2' : 'px-3'}`}>
         <ul className="space-y-0.5">
           {NAV_ITEMS.map(({ page, label, icon }) => {
             const isActive = activePage === page;
@@ -173,15 +176,21 @@ export default function Sidebar({
             Sem moldura, sem rótulo, sem cor: é ajuste de mobília, não
             navegação, e no topo competia com o logo por atenção. A seta
             acompanha a borda que ela empurra — encostada à direita quando
-            aberta, no meio quando é só a régua. */}
+            aberta, no meio quando é só a régua.
+
+            Aberta, o botão tem o tamanho da seta e nada mais. Ocupando a
+            largura toda ele virava uma faixa vazia atravessando o rodapé,
+            com um tico de desenho na ponta — e o realce do hover
+            acendia essa faixa inteira. Na régua a largura toda é 56px, que
+            já é o tamanho da seta: lá ela pode ficar. */}
         <button
           onClick={onAlternarRecolhida}
           aria-label={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
           title={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
           className={[
-            'mt-1 flex h-7 w-full items-center rounded-lg text-text-muted/60',
+            'mt-1 flex items-center justify-center rounded-md text-text-muted/60',
             'transition-colors hover:bg-bg-card-hover hover:text-text-primary',
-            recolhida ? 'justify-center' : 'justify-end px-1',
+            recolhida ? 'h-7 w-full' : 'ml-auto h-6 w-6',
           ].join(' ')}
         >
           {recolhida ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
