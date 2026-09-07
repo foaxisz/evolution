@@ -58,8 +58,8 @@ export function useSincronizacao(usuarioId: string | null) {
 
   // Gravações locais viram registros pendentes.
   useEffect(() => {
-    observarGravacoes((chave, anterior) => {
-      if (!anotarGravacao(chave, anterior)) return;
+    observarGravacoes((chave, anterior, idsMudados) => {
+      if (!anotarGravacao(chave, anterior, idsMudados)) return;
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(ciclo, ESPERA_MS);
     });

@@ -171,17 +171,34 @@ function acrescentar(p: Pendentes, chave: string, ids: string[]) {
 }
 
 /** Anota que estes registros mudaram aqui. */
-export function anotarGravacao(chave: string, anteriorBruto: string | null): boolean {
+export function anotarGravacao(
+  chave: string, anteriorBruto: string | null, idsMudados?: string[],
+): boolean {
   if (!ehSincronizada(chave)) return false;
 
-  let anterior: unknown = null;
-  try {
-    anterior = anteriorBruto === null ? null : JSON.parse(anteriorBruto);
-  } catch {
-    anterior = null;
-  }
-
-  const ids = diferenca(anterior, lerLocal(chave));
+  /*
+   * Quem grava pode dizer o que mudou, e aí não se compara nada.
+   *
+   * O caminho de baixo é o geral: ele descobre sozinho, e para isso
+   * serializa o documento inteiro em forma canônica duas vezes. Correto
+   * para uma lista de hábitos; caro para a cena de um quadro, onde cada
+   * traço à mão carrega a lista de pontos — 15ms medidos num quadro de
+   * 360KB, a cada gravação, no meio do desenho.
+   *
+   * Só o upsert usa o atalho. É o caminho longo que detecta exclusão
+   * (estava antes, não está agora), então um `delete` por aqui viraria
+   * registro que ressuscita.
+   */
+  const ids = idsMudados ?? diferenca(
+    (() => {
+      try {
+        return anteriorBruto === null ? null : JSON.parse(anteriorBruto);
+      } catch {
+        return null;
+      }
+    })(),
+    lerLocal(chave),
+  );
   if (ids.length === 0) return false;
 
   const p = pendentes();

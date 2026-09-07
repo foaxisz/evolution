@@ -74,18 +74,35 @@ export function limparErroDeGravacao(): void {
  * qualquer `delete` que esquecesse de marcar viraria um registro que
  * ressuscita, em silêncio.
  */
-let aoGravar: ((chave: string, anterior: string | null) => void) | null = null;
+let aoGravar:
+  | ((chave: string, anterior: string | null, idsMudados?: string[]) => void)
+  | null = null;
 
-export function observarGravacoes(f: (chave: string, anterior: string | null) => void): void {
+export function observarGravacoes(
+  f: (chave: string, anterior: string | null, idsMudados?: string[]) => void,
+): void {
   aoGravar = f;
 }
 
-function save<T>(key: string, data: T): boolean {
+/**
+ * `idsMudados` é um atalho para quem SABE o que mudou.
+ *
+ * Sem ele a sincronização descobre sozinha, comparando o documento antes e
+ * depois registro por registro — correto, e caro: são duas serializações
+ * canônicas do documento inteiro. Numa lista de hábitos isso não se sente;
+ * na cena de um quadro, que tem a lista de pontos de cada traço à mão, são
+ * 15ms medidos num quadro de 360KB, a cada gravação, no meio do desenho.
+ *
+ * Só passe quando a gravação for um upsert e nada mais tiver saído do
+ * documento: o caminho longo é também o que DETECTA exclusão, e um
+ * `delete` que use o atalho vira registro que ressuscita.
+ */
+function save<T>(key: string, data: T, idsMudados?: string[]): boolean {
   try {
     const anterior = localStorage.getItem(key);
     localStorage.setItem(key, JSON.stringify(data));
     ultimoErroDeGravacao = null;
-    aoGravar?.(key, anterior);
+    aoGravar?.(key, anterior, idsMudados);
     return true;
   } catch (e) {
     const cheio =
@@ -1068,5 +1085,8 @@ export function salvarCenaDeQuadro(quadroId: string, elementos: unknown[]): bool
   const cena: CenaDeQuadro = {
     id: quadroId, elementos, atualizadoEm: new Date().toISOString(),
   };
-  return save('evo_quadro_cenas', [...outras, cena]);
+  // Upsert de UM registro, e as outras cenas vão intactas: é exatamente o
+  // caso em que dá para dizer à sincronização o que mudou em vez de
+  // deixá-la comparar a cena inteira duas vezes a cada traço.
+  return save('evo_quadro_cenas', [...outras, cena], [quadroId]);
 }

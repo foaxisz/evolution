@@ -42,6 +42,13 @@ const CHAVE_GRADE = 'evo_quadro_grade';
  *  ser um estouro de branco na cara de quem estava no escuro. */
 const CHAVE_TEMA = 'evo_quadro_tema';
 
+/** O que vai para o disco: `deleted` fica na cena para o desfazer
+ *  funcionar, mas gravado é peso morto que só cresce. */
+function vivos(elementos: readonly unknown[] | null): unknown[] {
+  if (elementos === null) return [];
+  return (elementos as { isDeleted?: boolean }[]).filter(e => !e.isDeleted);
+}
+
 /** Grava a preferência e atualiza a tela, na mesma batida. */
 function trocar<T extends string | boolean>(
   chave: string, valor: T, aplicar: (v: T) => void,
@@ -78,19 +85,22 @@ export default function QuadroLivre({
     () => (localStorage.getItem(CHAVE_TEMA) === 'claro' ? 'claro' : 'escuro')
   );
   const relogio = useRef<number | null>(null);
-  const ultimos = useRef<unknown[] | null>(null);
+  const ultimos = useRef<readonly unknown[] | null>(null);
   const inicial = useRef(getCenaDeQuadro(quadroId));
 
+  /*
+   * `onChange` dispara a cada ponto de um traço à mão — dezenas de vezes
+   * por segundo. Então aqui NÃO se percorre a cena: guarda-se a referência
+   * e agenda. Filtrar e gravar só acontece quando a mão para, dentro do
+   * relógio, uma vez.
+   */
   const gravar = useCallback((elementos: readonly unknown[]) => {
-    // `deleted` fica na cena para o desfazer funcionar; no disco é peso
-    // morto que só cresce.
-    const vivos = (elementos as { isDeleted?: boolean }[]).filter(e => !e.isDeleted);
-    ultimos.current = vivos;
+    ultimos.current = elementos;
 
     if (relogio.current !== null) window.clearTimeout(relogio.current);
     relogio.current = window.setTimeout(() => {
       relogio.current = null;
-      if (!salvarCenaDeQuadro(quadroId, vivos)) setCheio(true);
+      if (!salvarCenaDeQuadro(quadroId, vivos(ultimos.current))) setCheio(true);
     }, ESPERA_MS);
   }, [quadroId]);
 
@@ -112,7 +122,7 @@ export default function QuadroLivre({
     if (relogio.current === null) return;
     window.clearTimeout(relogio.current);
     relogio.current = null;
-    if (ultimos.current) salvarCenaDeQuadro(quadroId, ultimos.current);
+    if (ultimos.current) salvarCenaDeQuadro(quadroId, vivos(ultimos.current));
   }, [quadroId]);
 
   // Trava a rolagem do fundo enquanto o quadro está aberto.

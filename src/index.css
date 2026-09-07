@@ -780,6 +780,30 @@ body {
   display: none;
 }
 
+/* O menu do botão direito, mais apertado.
+   O corpo dele foi pensado para a fonte sem serifa deles; na JetBrains
+   Mono, que é bem mais larga por caractere, "Copiar para a área de
+   transferência como PNG" virava uma faixa atravessando a tela. Aqui o
+   corpo desce e o respiro por linha diminui — a lista continua clicável e
+   deixa de competir com o desenho. */
+.quadro-imersivo .excalidraw .context-menu {
+  padding: 0.25rem 0;
+}
+
+.quadro-imersivo .excalidraw .context-menu-item {
+  min-width: 8rem;
+  padding: 0.1rem 0.7rem 0.1rem 0.9rem;
+  font-size: 0.72rem;
+}
+
+.quadro-imersivo .excalidraw .context-menu-item .context-menu-item__label {
+  margin-inline-end: 14px;
+}
+
+.quadro-imersivo .excalidraw .context-menu-item .context-menu-item__shortcut {
+  font-size: 0.62rem;
+}
+
 /* A biblioteca sai junto.
    Ela abre uma gaveta que navega o acervo público do excalidraw.com — mais
    um dono externo para o conteúdo daqui, e do tipo que a decisão de
