@@ -304,6 +304,27 @@ body {
     animation: cabineSai 0.2s ease-in forwards;
   }
 
+  /*
+   * O véu preto atrás de uma tela sobreposta.
+   *
+   * Par próprio, e não `animate-fade-in`: aquela classe está DESLIGADA de
+   * propósito mais abaixo, porque fade na troca de página engasga a
+   * montagem da árvore inteira. Aqui a árvore é só a tela sobreposta, e o
+   * comentário de lá já abre exceção para modal e painel.
+   *
+   * Só opacidade. Escala num elemento `inset-0` descola as bordas e mostra
+   * uma tira de página acesa em volta durante a saída.
+   */
+  .veu-entrando {
+    animation: fadeIn 0.2s ease-out both;
+    will-change: opacity;
+  }
+
+  .veu-saindo {
+    animation: fadeOut 0.2s ease-in forwards;
+    will-change: opacity;
+  }
+
   /* Aumenta a área que responde ao toque sem mexer no tamanho visual do
      botão nem empurrar nada no layout: o ::after é transparente, fica
      centralizado e só amplia o alvo. 44px é a medida de dedo.
@@ -470,7 +491,9 @@ body {
     .carimbo,
     .toast-entrando,
     .cabine-entrando,
-    .cabine-saindo {
+    .cabine-saindo,
+    .veu-entrando,
+    .veu-saindo {
       animation-duration: 0.01ms;
     }
     .ponto-status {
@@ -723,6 +746,11 @@ body {
 @keyframes cabineEntra {
   from { opacity: 0; transform: scale(0.97); }
   to   { opacity: 1; transform: none; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
 @keyframes cabineSai {

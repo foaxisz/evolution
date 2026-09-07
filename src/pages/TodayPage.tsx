@@ -15,6 +15,7 @@ import {
   semanasSeguidas,
 } from '../store';
 import Modal from '../components/ui/Modal';
+import Missao from '../components/today/Missao';
 import type { Habit, HabitLog, Action, Page } from '../types';
 import { hojeISO, formatarData } from '../lib/data';
 
@@ -142,6 +143,12 @@ export default function TodayPage({ onNavigate }: TodayPageProps) {
   if (isEmpty) {
     return (
       <div className="mx-auto w-full max-w-4xl flex-1 p-4 md:p-6 lg:p-8 animate-fade-in">
+        {/* A missão vem antes do hero: ela vale para quem ainda não criou
+            hábito nenhum tanto quanto para quem já tem a rotina montada. */}
+        <div className="mb-6">
+          <Missao />
+        </div>
+
         {/* Welcome Hero */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-accent/20 via-bg-card to-bg-card border border-accent/20 p-8 md:p-10 mb-8">
           <div className="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -226,6 +233,8 @@ export default function TodayPage({ onNavigate }: TodayPageProps) {
     // bloco — seja ele qual for — nunca deixa margem sobrando no rodapé.
     // O respiro final já vem do p-* daqui e do pb-16 do Layout (nav fixa).
     <div className="mx-auto w-full max-w-4xl flex-1 space-y-6 p-4 md:p-6 lg:p-8 animate-fade-in">
+      <Missao />
+
       {/* Sequências semanais em destaque */}
       {habits.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
