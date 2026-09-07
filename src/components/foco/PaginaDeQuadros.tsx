@@ -310,7 +310,6 @@ export default function PaginaDeQuadros({
       <Suspense fallback={null}>
         <QuadroLivre
           quadroId={livreAberto.id}
-          cor={cor}
           nome={livreAberto.nome}
           onFechar={() => setAberto(null)}
           onRenomear={n => { renomearQuadro(livreAberto.id, n); recarregar(); }}

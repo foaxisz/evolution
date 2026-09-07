@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Grid2x2, Grid2x2X } from 'lucide-react';
+import { ArrowLeft, Grid2x2, Grid2x2X, Sun, Moon } from 'lucide-react';
 import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { getCenaDeQuadro, salvarCenaDeQuadro } from '../../store';
@@ -8,9 +8,9 @@ import { getCenaDeQuadro, salvarCenaDeQuadro } from '../../store';
 /**
  * O quadro livre: tela infinita, desenho à mão, formas e setas.
  *
- * É o Excalidraw por dentro. Vestimos ele — a paleta do app, a cor da
- * frente como cor padrão do traço, cantos retos, e a barra reduzida ao que
- * serve aqui. O que fica de fora é de propósito:
+ * É o Excalidraw por dentro, e a COR é dele: tema claro ou escuro, no
+ * botão, sem repintura nossa. Nosso ficam a forma (canto reto), a
+ * tipografia e o que a barra mostra. O que fica de fora é de propósito:
  *
  *   - Imagem: a cena mora no localStorage, e uma imagem colada vira base64
  *     dentro dela. Um print só estoura a cota dos 5MB do app inteiro.
@@ -37,11 +37,36 @@ const ESPERA_MS = 700;
  */
 const CHAVE_GRADE = 'evo_quadro_grade';
 
+/** Claro ou escuro, pela mesma razão da grade: é jeito de trabalhar. Nasce
+ *  escuro porque o app é escuro — abrir um quadro em tela cheia não deveria
+ *  ser um estouro de branco na cara de quem estava no escuro. */
+const CHAVE_TEMA = 'evo_quadro_tema';
+
+/** Grava a preferência e atualiza a tela, na mesma batida. */
+function trocar<T extends string | boolean>(
+  chave: string, valor: T, aplicar: (v: T) => void,
+): void {
+  localStorage.setItem(chave, typeof valor === 'boolean' ? (valor ? '1' : '0') : valor);
+  aplicar(valor);
+}
+
+/**
+ * Os botões nossos, pintados com as variáveis DELE.
+ *
+ * Assim eles seguem o tema escolhido sem repetir a paleta aqui: no claro
+ * ficam claros, no escuro ficam escuros, e uma versão nova do Excalidraw
+ * que reequilibre as cores leva os nossos botões junto.
+ */
+function estiloDeBotao(ativo: boolean): React.CSSProperties {
+  return ativo
+    ? { background: 'var(--color-primary)', color: 'var(--color-icon-white, #fff)' }
+    : { background: 'var(--island-bg-color)', color: 'var(--color-on-surface)' };
+}
+
 export default function QuadroLivre({
-  quadroId, cor, nome, onFechar, onRenomear,
+  quadroId, nome, onFechar, onRenomear,
 }: {
   quadroId: string;
-  cor: string;
   nome: string;
   onFechar: () => void;
   onRenomear: (nome: string) => void;
@@ -49,6 +74,9 @@ export default function QuadroLivre({
   const [cheio, setCheio] = useState(false);
   const [rascunho, setRascunho] = useState<string | null>(null);
   const [grade, setGrade] = useState(() => localStorage.getItem(CHAVE_GRADE) === '1');
+  const [tema, setTema] = useState<'claro' | 'escuro'>(
+    () => (localStorage.getItem(CHAVE_TEMA) === 'claro' ? 'claro' : 'escuro')
+  );
   const relogio = useRef<number | null>(null);
   const ultimos = useRef<unknown[] | null>(null);
   const inicial = useRef(getCenaDeQuadro(quadroId));
@@ -115,30 +143,32 @@ export default function QuadroLivre({
   return createPortal(
     <div
       className="quadro-imersivo cabine-entrando fixed inset-0 z-[120]"
-      style={{ backgroundColor: 'var(--cor-tela-quadro)' }}
+      // A moldura acompanha a prancheta: enquanto o Excalidraw monta, é
+      // este fundo que aparece, e a cor errada aqui é um flash na entrada.
+      style={{ backgroundColor: tema === 'claro' ? '#ffffff' : '#121212' }}
     >
       <Excalidraw
-        // "light" de propósito, num app inteiro escuro.
-        //
-        // O modo escuro do Excalidraw não troca as cores: ele joga um
-        // `filter: invert()` por cima da tela. Nele, um fundo quase-preto
-        // vira cinza-claro e o ciano da frente vira laranja. O tema claro
-        // não filtra nada — as cores saem como foram pedidas —, e o
-        // cromado dele já vem escuro pelas variáveis que redeclaramos no
-        // `index.css`.
-        theme="light"
+        /*
+         * O tema é o DELE, claro ou escuro, e nenhum dos dois é repintado.
+         *
+         * Houve aqui um tema roxo montado à mão por cima. Ele custava caro:
+         * o escuro do Excalidraw não troca cores, joga um `filter: invert()`
+         * na tela inteira, então qualquer cor nossa saía trocada — e a
+         * grade, que é desenhada no canvas e não lê CSS, precisava ser
+         * repintada na hora de compilar. Nos dois temas nativos nada disso
+         * é preciso: a paleta deles já foi calibrada para cada um.
+         *
+         * Sem `viewBackgroundColor` também de propósito: o padrão deles é
+         * branco, que no escuro o filtro inverte para o quase-preto certo.
+         */
+        theme={tema === 'claro' ? 'light' : 'dark'}
         langCode="pt-BR"
         gridModeEnabled={grade}
         initialData={{
           elements: (inicial.current?.elementos ?? []) as never,
           appState: {
-            // O mesmo roxo do `--cor-tela-quadro` no index.css. Repetido
-            // aqui porque esta cor entra na CENA — é ela que o Excalidraw
-            // pinta no canvas e no PNG exportado, e canvas não lê variável
-            // de CSS. Mudar uma sem a outra deixa a tela de um tom e o
-            // cromado de outro.
-            viewBackgroundColor: '#1b1436',
-            currentItemStrokeColor: cor,
+            // Traço reto e fonte de máquina: não são cor, não brigam com
+            // tema nenhum, e são o que ainda diz que este quadro é daqui.
             currentItemRoughness: 0,
             currentItemFontFamily: 3,
           },
@@ -170,8 +200,12 @@ export default function QuadroLivre({
                   // Excalidraw corta a propagacao mais acima.
                   if (e.key === 'Escape') { e.stopPropagation(); setRascunho(null); }
                 }}
-                className="font-terminal hidden w-40 min-w-0 rounded-[3px] border-2 border-solid bg-bg-input px-2 py-1 text-[16px] leading-none text-text-primary focus:outline-none lg:block"
-                style={{ borderColor: cor }}
+                className="font-terminal hidden w-40 min-w-0 rounded-[3px] px-2 py-1 text-[16px] leading-none focus:outline-none lg:block"
+                style={{
+                  background: 'var(--input-bg-color)',
+                  color: 'var(--text-primary-color)',
+                  border: '1px solid var(--color-primary)',
+                }}
               />
             ) : (
               <button
@@ -182,34 +216,39 @@ export default function QuadroLivre({
                    MAIS o botão de sair. Cortar o nome em "Pran…" dá um toco
                    sem função; o sair, sim, precisa estar sempre lá. Quem
                    quiser renomear numa tela estreita usa o lápis na lista. */
-                className="font-terminal hidden max-w-[12rem] truncate rounded-[3px] px-1.5 py-1 text-[16px] leading-none text-text-secondary transition-colors hover:text-text-primary lg:block"
+                className="font-terminal hidden max-w-[12rem] truncate rounded-[3px] px-1.5 py-1 text-[16px] leading-none opacity-70 transition-opacity hover:opacity-100 lg:block"
+                style={{ color: 'var(--color-on-surface)' }}
               >
                 {nome}
               </button>
             )}
+
             <button
-              onClick={() => {
-                const v = !grade;
-                localStorage.setItem(CHAVE_GRADE, v ? '1' : '0');
-                setGrade(v);
-              }}
+              onClick={() => trocar(CHAVE_GRADE, !grade, setGrade)}
               aria-label={grade ? 'Tirar o quadriculado' : 'Pôr o quadriculado'}
               title={grade ? 'Tirar o quadriculado' : 'Pôr o quadriculado'}
-              className={[
-                'flex flex-shrink-0 items-center rounded-[3px] border-2 border-solid p-1.5 transition-colors',
-                grade
-                  ? 'border-accent-dim bg-accent/20 text-accent-light'
-                  : 'border-border bg-bg-card text-text-muted hover:text-text-primary',
-              ].join(' ')}
+              className="flex flex-shrink-0 items-center rounded-[3px] p-1.5"
+              style={estiloDeBotao(grade)}
             >
               {grade ? <Grid2x2 size={14} /> : <Grid2x2X size={14} />}
+            </button>
+
+            <button
+              onClick={() => trocar(CHAVE_TEMA, tema === 'claro' ? 'escuro' : 'claro', setTema)}
+              aria-label={tema === 'claro' ? 'Prancheta escura' : 'Prancheta clara'}
+              title={tema === 'claro' ? 'Prancheta escura' : 'Prancheta clara'}
+              className="flex flex-shrink-0 items-center rounded-[3px] p-1.5"
+              style={estiloDeBotao(false)}
+            >
+              {tema === 'claro' ? <Moon size={14} /> : <Sun size={14} />}
             </button>
 
             <button
               onClick={onFechar}
               aria-label="Voltar para os quadros"
               title="Voltar para os quadros"
-              className="flex flex-shrink-0 items-center gap-1.5 rounded-[3px] border-2 border-solid border-border bg-bg-card px-2 py-1.5 text-text-muted transition-colors hover:text-text-primary"
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-[3px] px-2 py-1.5"
+              style={estiloDeBotao(false)}
             >
               <ArrowLeft size={14} />
               <span className="font-arcade text-[0.5rem] uppercase leading-none">Sair</span>
