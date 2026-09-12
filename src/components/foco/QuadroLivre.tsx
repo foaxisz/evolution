@@ -4,6 +4,7 @@ import { ArrowLeft, Grid2x2, Grid2x2X, Sun, Moon } from 'lucide-react';
 import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { getCenaDeQuadro, salvarCenaDeQuadro } from '../../store';
+import { travarRemonte } from '../../lib/travaDeRemonte';
 
 /**
  * O quadro livre: tela infinita, desenho à mão, formas e setas.
@@ -124,6 +125,22 @@ export default function QuadroLivre({
     relogio.current = null;
     if (ultimos.current) salvarCenaDeQuadro(quadroId, vivos(ultimos.current));
   }, [quadroId]);
+
+  /*
+   * Segura o remonte da página enquanto o quadro está aberto.
+   *
+   * O que o Excalidraw guarda no estado dele — zoom, posição da vista,
+   * pilha de desfazer, ferramenta na mão — não está no disco, e remontar
+   * joga tudo fora: ele é reconstruído do `initialData`, com
+   * `scrollToContent`. Medido: o zoom voltava de 110% para 100% e a vista
+   * saltava para o conteúdo. E como o vigia da sincronização pergunta ao
+   * servidor a cada 8 segundos, o quadro se resetava embaixo da mão de
+   * quem desenhava, sem parar.
+   *
+   * A novidade não se perde, só espera: ela já está no `localStorage`, e a
+   * página remonta assim que o quadro fechar.
+   */
+  useEffect(() => travarRemonte(), []);
 
   // Trava a rolagem do fundo enquanto o quadro está aberto.
   useEffect(() => {

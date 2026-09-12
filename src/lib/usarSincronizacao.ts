@@ -5,6 +5,7 @@ import {
   anotarGravacao, empurrar, executarCiclo, assinarMudancas, diagnosticar,
   type EstadoDaSincronizacao,
 } from './sincronizacao';
+import { remonteTravado, aoDestravarRemonte } from './travaDeRemonte';
 
 /**
  * Espera antes de enviar.
@@ -29,6 +30,15 @@ export function useSincronizacao(usuarioId: string | null) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rodando = useRef(false);
   const denovo = useRef(false);
+  /** Novidade que chegou com o remonte travado e ainda não foi mostrada. */
+  const bumpEmEspera = useRef(false);
+
+  // Trava caiu: se ficou novidade esperando, remonta agora.
+  useEffect(() => aoDestravarRemonte(() => {
+    if (!bumpEmEspera.current) return;
+    bumpEmEspera.current = false;
+    setVersao(v => v + 1);
+  }), []);
 
   /**
    * Um ciclo unificado (v3): ENVIAR pendentes locais -> PUXAR remotas -> RECONCILIAR.
@@ -42,7 +52,22 @@ export function useSincronizacao(usuarioId: string | null) {
       setEstado('enviando');
       const mudadas = await executarCiclo();
 
-      if (mudadas.length > 0) setVersao(v => v + 1);
+      /*
+       * Novidade remonta a página — menos quando alguém está trabalhando
+       * numa tela que não sobrevive a remonte. Aí ela fica guardada e é
+       * cobrada quando a trava cair.
+       *
+       * Sem isto, o vigia de 8 segundos bastava para resetar o quadro
+       * livre embaixo de quem desenhava: o Excalidraw é reconstruído do
+       * `initialData` e perde zoom, vista e desfazer.
+       *
+       * Nada se perde na espera: o dado novo já está no `localStorage`, e
+       * é de lá que a página lê quando remontar.
+       */
+      if (mudadas.length > 0) {
+        if (remonteTravado()) bumpEmEspera.current = true;
+        else setVersao(v => v + 1);
+      }
       setMotivo(null);
       setEstado('ocioso');
     } catch (e) {

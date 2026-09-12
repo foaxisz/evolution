@@ -459,8 +459,14 @@ function Ritmo({
   return (
     <>
       {/* O feito em bitmap, o alvo em mono: a diferença de fonte já diz qual
-          dos dois números é o seu. */}
-      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          dos dois números é o seu.
+
+          O vão é 12px e não os 8px de antes. A Press Start 2P é fonte de
+          bitmap: o glifo preenche o bloco e não sobra folga lateral nenhuma
+          dentro dele, então o espaço que se vê é só o que o `gap` dá. Ao
+          lado de um número desse peso, 8px encostava — o alvo parecia
+          grudado no que foi feito. */}
+      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
         <span className="font-arcade text-base leading-[1.45] text-text-primary">
           {formatarDuracaoCurta(segundos)}
         </span>
