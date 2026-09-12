@@ -5,6 +5,7 @@ import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { getCenaDeQuadro, salvarCenaDeQuadro } from '../../store';
 import { travarRemonte } from '../../lib/travaDeRemonte';
+import { textoDaSelecao, type ElementoDeCena } from '../../lib/quadroLivre';
 
 /**
  * O quadro livre: tela infinita, desenho à mão, formas e setas.
@@ -88,6 +89,12 @@ export default function QuadroLivre({
   const relogio = useRef<number | null>(null);
   const ultimos = useRef<readonly unknown[] | null>(null);
   const inicial = useRef(getCenaDeQuadro(quadroId));
+  const caixa = useRef<HTMLDivElement>(null);
+  /** A API do Excalidraw, só para saber o que está selecionado ao copiar. */
+  const prancheta = useRef<{
+    getSceneElements: () => readonly unknown[];
+    getAppState: () => { selectedElementIds: Readonly<Record<string, boolean>> };
+  } | null>(null);
 
   /*
    * `onChange` dispara a cada ponto de um traço à mão — dezenas de vezes
@@ -142,6 +149,56 @@ export default function QuadroLivre({
    */
   useEffect(() => travarRemonte(), []);
 
+  /*
+   * Ctrl+C num texto copia O TEXTO, e não o JSON dos elementos.
+   *
+   * O Ctrl+C do Excalidraw copia a cena serializada, e isso é certo: é
+   * assim que se cola uma forma em outro quadro com cor, tamanho e posição.
+   * Só que o caso mais comum de todos é escrever um texto na prancheta e
+   * levá-lo para fora — e aí o que colava no outro programa era um
+   * `{"type":"excalidraw/clipboard",...}` de mil caracteres.
+   *
+   * Em CAPTURA, e no nosso contêiner. Ele ouve `copy` no `document` em
+   * borbulha (`addEventListener(document, 'copy', ...)`), e a captura aqui
+   * dentro roda antes disso — medida a ordem: contêiner-captura vem antes
+   * de document-borbulha. Então `stopPropagation` basta para o handler
+   * dele não rodar, sem precisar desfazer nada depois.
+   *
+   * Sai do caminho quando há texto selecionado na tela: aí a pessoa está
+   * DENTRO de um elemento de texto, editando, e selecionou um trecho com o
+   * mouse. Copiar o elemento inteiro nessa hora seria roubar o gesto.
+   */
+  useEffect(() => {
+    const moldura = caixa.current;
+    if (!moldura) return;
+
+    function aoCopiar(e: ClipboardEvent) {
+      const api = prancheta.current;
+      if (!api || !e.clipboardData) return;
+
+      const alvo = e.target as HTMLElement | null;
+      if (alvo?.isContentEditable || alvo instanceof HTMLInputElement
+        || alvo instanceof HTMLTextAreaElement) return;
+      if (window.getSelection()?.toString()) return;
+
+      const texto = textoDaSelecao(
+        api.getSceneElements() as ElementoDeCena[],
+        api.getAppState().selectedElementIds,
+      );
+      if (texto === null) return;
+
+      e.clipboardData.setData('text/plain', texto);
+      // Os dois: `preventDefault` para o navegador não escrever a seleção
+      // vazia por cima, `stopPropagation` para o Excalidraw não escrever o
+      // JSON depois.
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    moldura.addEventListener('copy', aoCopiar, true);
+    return () => moldura.removeEventListener('copy', aoCopiar, true);
+  }, []);
+
   // Trava a rolagem do fundo enquanto o quadro está aberto.
   useEffect(() => {
     const antes = document.body.style.overflow;
@@ -169,6 +226,7 @@ export default function QuadroLivre({
 
   return createPortal(
     <div
+      ref={caixa}
       className="quadro-imersivo cabine-entrando fixed inset-0 z-[120]"
       // A moldura acompanha a prancheta: enquanto o Excalidraw monta, é
       // este fundo que aparece, e a cor errada aqui é um flash na entrada.
@@ -190,6 +248,7 @@ export default function QuadroLivre({
          */
         theme={tema === 'claro' ? 'light' : 'dark'}
         langCode="pt-BR"
+        excalidrawAPI={api => { prancheta.current = api as never; }}
         gridModeEnabled={grade}
         initialData={{
           elements: (inicial.current?.elementos ?? []) as never,
