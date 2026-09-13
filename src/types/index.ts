@@ -15,6 +15,16 @@ export interface Habit {
   unit?: string;
   /** Posição manual na lista. Menor aparece primeiro. */
   order?: number;
+  /**
+   * O que se quer: fazer a coisa, ou deixar de fazer.
+   *
+   * Ausente = 'fazer', então todo hábito que já existe continua valendo
+   * sem migração. Um 'evitar' nasce com `frequency: 7` e todos os dias
+   * preferidos — não é enfeite: `trajetorias()` usa a frequência como
+   * meta da semana, e com 7 uma semana limpa dá 100% sem precisar
+   * ensinar o Dashboard o que é um anti-hábito.
+   */
+  tipo?: 'fazer' | 'evitar';
 }
 
 export interface HabitLog {

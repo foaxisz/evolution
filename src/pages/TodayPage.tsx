@@ -13,6 +13,7 @@ import {
   getDestaques,
   setDestaques,
   semanasSeguidas,
+  diasLimposSeguidos,
 } from '../store';
 import Modal from '../components/ui/Modal';
 import Missao from '../components/today/Missao';
@@ -97,8 +98,20 @@ export default function TodayPage({ onNavigate }: TodayPageProps) {
   // fazendo a lista saltar a cada clique.
   const agendadoHoje = (h: Habit) =>
     h.preferredDays.length === 0 || h.preferredDays.includes(todayDow);
-  const habitosDoDia = habits.filter(agendadoHoje);
-  const habitosOutrosDias = habits.filter(h => !agendadoHoje(h));
+
+  /*
+   * As duas listas são separadas na origem, e não só na hora de desenhar.
+   *
+   * Anti-hábito tem os sete dias preferidos, então ele passaria por
+   * `agendadoHoje` e cairia no meio dos hábitos — "Ler" e "Sem café" lado
+   * a lado, com a mesma cara e significados diferentes para a mesma
+   * marca. Separar aqui é o que mantém as duas gramáticas legíveis.
+   */
+  const deFazer = habits.filter(h => (h.tipo ?? 'fazer') === 'fazer');
+  const aEvitar = habits.filter(h => h.tipo === 'evitar');
+
+  const habitosDoDia = deFazer.filter(agendadoHoje);
+  const habitosOutrosDias = deFazer.filter(h => !agendadoHoje(h));
   const todayHabits = [...habitosDoDia, ...habitosOutrosDias];
 
   // Só o que é de hoje: atrasadas, vencendo hoje e as sem prazo. Uma ação
@@ -241,16 +254,16 @@ export default function TodayPage({ onNavigate }: TodayPageProps) {
           {[0, 1].map(slot => (
             <CardSequencia
               key={slot}
-              habit={habits.find(h => h.id === destaques[slot]) ?? habits[slot]}
+              habit={deFazer.find(h => h.id === destaques[slot]) ?? deFazer[slot]}
               semanas={
                 (() => {
-                  const h = habits.find(x => x.id === destaques[slot]) ?? habits[slot];
+                  const h = deFazer.find(x => x.id === destaques[slot]) ?? deFazer[slot];
                   return h ? semanasSeguidas(h.id, h.frequency) : 0;
                 })()
               }
               feitosNaSemana={
                 (() => {
-                  const h = habits.find(x => x.id === destaques[slot]) ?? habits[slot];
+                  const h = deFazer.find(x => x.id === destaques[slot]) ?? deFazer[slot];
                   if (!h) return 0;
                   return weekLogs.filter(l => l.habitId === h.id).length;
                 })()
@@ -300,6 +313,37 @@ export default function TodayPage({ onNavigate }: TodayPageProps) {
                 />
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {/*
+        ── Evitar ──
+
+        Abaixo dos hábitos, e nunca misturado com eles: a mesma marca
+        significa "fiz" de um lado e "passei limpo" do outro, e é o título
+        da seção que ensina a ler. Sem ele, marcar "Sem café" pareceria
+        registrar um café.
+      */}
+      {aEvitar.length > 0 && (
+        <section>
+          <h2 className="text-xs font-medium text-accent uppercase tracking-widest mb-3">
+            Evitar
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {aEvitar.map(habit => (
+              <WeekHabitCard
+                key={habit.id}
+                habit={habit}
+                weekDayStrings={weekDayStrings}
+                doneDays={new Set(
+                  weekLogs.filter(l => l.habitId === habit.id).map(l => l.date)
+                )}
+                todayStr={todayStr}
+                limpos={diasLimposSeguidos(habit)}
+                onToggleDay={dia => handleToggleDay(habit.id, dia)}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -518,12 +562,16 @@ function CardShell({
   isCompleted: boolean;
   children: React.ReactNode;
   subtitle: string;
-  counter: { atual: number; alvo: number };
+  /** `alvo: null` mostra só o número — um anti-hábito não tem meta a
+   *  atingir, tem tempo acumulado. */
+  counter: { atual: number; alvo: number | null };
   progress: number;
   foraDoDia?: boolean;
 }) {
   const cor = habit.color ?? 'var(--color-accent)';
-  const diasPref = habit.preferredDays.length
+  // Num 'evitar' os sete dias estão marcados, e listar "Dom · Seg · Ter…"
+  // não informa nada — só enche a linha.
+  const diasPref = habit.tipo !== 'evitar' && habit.preferredDays.length
     ? habit.preferredDays.map(d => DAY_LABELS[d]).join(' · ')
     : null;
 
@@ -567,7 +615,7 @@ function CardShell({
           <span style={{ color: cor }} className={isCompleted ? 'glow' : undefined}>
             {counter.atual}
           </span>
-          <span className="text-text-muted"> / {counter.alvo}</span>
+          {counter.alvo !== null && <span className="text-text-muted"> / {counter.alvo}</span>}
         </span>
       </div>
 
@@ -705,6 +753,7 @@ function WeekHabitCard({
   todayStr,
   onToggleDay,
   foraDoDia,
+  limpos,
 }: {
   habit: Habit;
   weekDayStrings: string[];
@@ -712,18 +761,31 @@ function WeekHabitCard({
   todayStr: string;
   onToggleDay: (dia: string) => void;
   foraDoDia?: boolean;
+  /** Dias limpos seguidos. Só chega para um 'evitar'. */
+  limpos?: number;
 }) {
   const cor = habit.color ?? 'var(--color-accent)';
   const feitos = weekDayStrings.filter(d => doneDays.has(d)).length;
 
+  /*
+   * O mesmo cartão serve aos dois, e o que muda é a LEITURA.
+   *
+   * Num hábito, o número diz quanto falta para a meta da semana. Num
+   * anti-hábito não existe meta a atingir — existe tempo acumulado, e a
+   * pergunta é há quantos dias não se cai. Mesma faixa de sete dias,
+   * mesmo gesto de marcar, outra pergunta respondida.
+   */
+  const evitar = habit.tipo === 'evitar';
+
   return (
     <CardShell
       habit={habit}
-      isCompleted={feitos >= habit.frequency}
+      // Num 'evitar', o certinho do dia é ter passado limpo HOJE.
+      isCompleted={evitar ? doneDays.has(todayStr) : feitos >= habit.frequency}
       foraDoDia={foraDoDia}
-      subtitle="Esta semana"
-      counter={{ atual: feitos, alvo: habit.frequency }}
-      progress={(feitos / habit.frequency) * 100}
+      subtitle={evitar ? (limpos === 1 ? 'dia limpo' : 'dias limpos') : 'Esta semana'}
+      counter={evitar ? { atual: limpos ?? 0, alvo: null } : { atual: feitos, alvo: habit.frequency }}
+      progress={(feitos / (evitar ? 7 : habit.frequency)) * 100}
     >
       <div className="flex gap-1.5">
         {weekDayStrings.map(dia => {
@@ -734,7 +796,7 @@ function WeekHabitCard({
           // faixa é fixa os dois coincidem, mas derivar da data mantém a
           // legenda certa mesmo se a origem da semana mudar de novo.
           const dow = new Date(`${dia}T12:00:00`).getDay();
-          const preferencial = habit.preferredDays.includes(dow);
+          const preferencial = !evitar && habit.preferredDays.includes(dow);
           return (
             <button
               key={dia}

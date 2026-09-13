@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format, subDays } from 'date-fns';
 import { Plus, Edit2, Trash2, Target, ChevronUp, ChevronDown } from 'lucide-react';
-import { getHabits, saveHabit, deleteHabit, getHabitLogs, toggleHabitLog, moverHabito } from '../store';
+import { getHabits, saveHabit, deleteHabit, getHabitLogs, toggleHabitLog, moverHabito, diasLimposSeguidos } from '../store';
 import type { Habit, HabitLog } from '../types';
 import Modal from '../components/ui/Modal';
 import EmptyState from '../components/ui/EmptyState';
@@ -50,6 +50,7 @@ const PRESET_COLORS = [
 
 interface FormData {
   name: string;
+  tipo: 'fazer' | 'evitar';
   description: string;
   frequency: number;
   preferredDays: number[];
@@ -77,6 +78,7 @@ function limitarFrequencia(valor: number): number {
 
 const DEFAULT_FORM: FormData = {
   name: '',
+  tipo: 'fazer',
   description: '',
   frequency: 3,
   preferredDays: [],
@@ -127,6 +129,7 @@ export default function HabitsPage() {
     setForm({
       name: habit.name,
       description: habit.description ?? '',
+      tipo: habit.tipo ?? 'fazer',
       frequency: habit.frequency,
       preferredDays: [...habit.preferredDays],
       color: habit.color ?? '#a855f7',
@@ -153,15 +156,22 @@ export default function HabitsPage() {
       id: editingHabit?.id,
       name: form.name.trim(),
       description: form.description.trim() || undefined,
-      frequency: limitarFrequencia(form.frequency),
-      preferredDays: [...form.preferredDays].sort((a, b) => a - b),
+      tipo: form.tipo,
+      // Um 'evitar' vale todo dia, e os dois campos vão preenchidos assim de
+      // propósito: `trajetorias()` no Dashboard usa a frequência como meta
+      // da semana, e com 7 uma semana limpa dá 100% sem precisar ensinar o
+      // gráfico o que é anti-hábito.
+      frequency: form.tipo === 'evitar' ? 7 : limitarFrequencia(form.frequency),
+      preferredDays: form.tipo === 'evitar'
+        ? [0, 1, 2, 3, 4, 5, 6]
+        : [...form.preferredDays].sort((a, b) => a - b),
       color: form.color,
       icon: form.icon,
       // `min`/`max` do input não seguram valor digitado à mão — só o
       // seletor. Sem o teto aqui, uma meta absurda ia parar no
       // localStorage e travava a tela Hoje em toda abertura.
-      dailyTarget: form.contavel ? limitarMeta(form.dailyTarget) : undefined,
-      unit: form.contavel ? form.unit.trim() || undefined : undefined,
+      dailyTarget: form.tipo === 'fazer' && form.contavel ? limitarMeta(form.dailyTarget) : undefined,
+      unit: form.tipo === 'fazer' && form.contavel ? form.unit.trim() || undefined : undefined,
     });
     closeForm();
     load();
@@ -208,22 +218,47 @@ export default function HabitsPage() {
           onAction={openCreate}
         />
       ) : (
-        <div className="space-y-3">
-          {habits.map((habit, i) => {
-            const habitWeekLogs = weekLogs.filter(l => l.habitId === habit.id);
+        /*
+          Duas seções, e o título da primeira só aparece quando existe uma
+          segunda: quem nunca criou um "evitar" não deve ganhar um rótulo
+          "Hábitos" em cima de uma lista que já é obviamente de hábitos.
+
+          As setas são por seção — `i` e o comprimento vêm da lista
+          filtrada, e o `moverHabito` troca com o vizinho do mesmo tipo.
+        */
+        <div className="space-y-6">
+          {([
+            { tipo: 'fazer', titulo: 'Hábitos' },
+            { tipo: 'evitar', titulo: 'Evitar' },
+          ] as const).map(secao => {
+            const daSecao = habits.filter(h => (h.tipo ?? 'fazer') === secao.tipo);
+            if (daSecao.length === 0) return null;
+            const temAsDuas = habits.some(h => (h.tipo ?? 'fazer') !== secao.tipo);
+
             return (
-              <HabitManageCard
-                key={habit.id}
-                habit={habit}
-                habitWeekLogs={habitWeekLogs}
-                todayStr={todayStr}
-                onToggleDay={dia => { toggleHabitLog(habit.id, dia); load(); }}
-                weekDayStrings={weekDayStrings}
-                onEdit={() => openEdit(habit)}
-                onDelete={() => setDeleteTarget(habit)}
-                onSubir={i > 0 ? () => { moverHabito(habit.id, -1); load(); } : undefined}
-                onDescer={i < habits.length - 1 ? () => { moverHabito(habit.id, 1); load(); } : undefined}
-              />
+              <section key={secao.tipo}>
+                {temAsDuas && (
+                  <h2 className="mb-3 text-xs font-medium uppercase tracking-widest text-accent">
+                    {secao.titulo}
+                  </h2>
+                )}
+                <div className="space-y-3">
+                  {daSecao.map((habit, i) => (
+                    <HabitManageCard
+                      key={habit.id}
+                      habit={habit}
+                      habitWeekLogs={weekLogs.filter(l => l.habitId === habit.id)}
+                      todayStr={todayStr}
+                      onToggleDay={dia => { toggleHabitLog(habit.id, dia); load(); }}
+                      weekDayStrings={weekDayStrings}
+                      onEdit={() => openEdit(habit)}
+                      onDelete={() => setDeleteTarget(habit)}
+                      onSubir={i > 0 ? () => { moverHabito(habit.id, -1); load(); } : undefined}
+                      onDescer={i < daSecao.length - 1 ? () => { moverHabito(habit.id, 1); load(); } : undefined}
+                    />
+                  ))}
+                </div>
+              </section>
             );
           })}
         </div>
@@ -270,7 +305,50 @@ export default function HabitsPage() {
             />
           </div>
 
-          {/* Frequency */}
+          {/*
+            Fazer ou evitar.
+
+            Primeiro campo depois do nome porque ele MUDA O RESTO do
+            formulário: frequência, dias preferidos e meta diária somem
+            para um "evitar". Deixá-lo no fim faria os campos sumirem
+            embaixo de quem já tinha preenchido.
+          */}
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+              O que você quer
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: 'fazer', rotulo: 'Fazer', ajuda: 'criar o hábito' },
+                { v: 'evitar', rotulo: 'Evitar', ajuda: 'largar o hábito' },
+              ] as const).map(o => (
+                <button
+                  key={o.v}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, tipo: o.v }))}
+                  aria-pressed={form.tipo === o.v}
+                  className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                    form.tipo === o.v
+                      ? 'border-accent bg-accent-bg text-text-primary'
+                      : 'border-border bg-bg-input text-text-secondary hover:border-border-light'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{o.rotulo}</span>
+                  <span className="block text-xs text-text-muted">{o.ajuda}</span>
+                </button>
+              ))}
+            </div>
+            {form.tipo === 'evitar' && (
+              <p className="mt-2 text-xs text-text-muted">
+                Vale todo dia, e marcar significa que você passou limpo. A conta
+                é de dias limpos seguidos.
+              </p>
+            )}
+          </div>
+
+          {/* Frequency — só para "fazer": um "evitar" vale todo dia, e um
+              seletor de 3x por semana ali só poderia confundir. */}
+          {form.tipo === 'fazer' && (
           <div>
             <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
               Frequência — {form.frequency}x por semana
@@ -310,8 +388,11 @@ export default function HabitsPage() {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Meta contável no dia */}
+          {/* Meta contável no dia — também só para "fazer": contar quantas
+              vezes se fez algo não tem par quando a meta é zero. */}
+          {form.tipo === 'fazer' && (
           <div className="rounded-xl border border-border bg-bg-input p-3">
             <label className="flex cursor-pointer items-center gap-3">
               <input
@@ -360,8 +441,10 @@ export default function HabitsPage() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Preferred Days */}
+          {/* Preferred Days — não existe para "evitar": todo dia conta. */}
+          {form.tipo === 'fazer' && (
           <div>
             <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
               Dias preferenciais
@@ -391,6 +474,7 @@ export default function HabitsPage() {
               </p>
             )}
           </div>
+          )}
 
           {/* Color */}
           <div>
@@ -500,6 +584,8 @@ function HabitManageCard({
   const accentColor = habit.color ?? 'var(--color-accent)';
   const weekCount = habitWeekLogs.length;
   const pct = Math.min(100, Math.round((weekCount / habit.frequency) * 100));
+  const evitar = habit.tipo === 'evitar';
+  const limpos = evitar ? diasLimposSeguidos(habit) : 0;
 
   return (
     <div
@@ -559,10 +645,20 @@ function HabitManageCard({
             </div>
           </div>
 
-          {/* Meta row: frequency + preferred days */}
+          {/*
+            Meta row: frequency + preferred days.
+
+            Num 'evitar' nenhum dos dois se mostra. A frequência 7 e os sete
+            dias marcados existem para o Dashboard continuar somando certo —
+            são encanamento, e escrever "7x por semana · Dom Seg Ter Qua Qui
+            Sex Sáb" embaixo de "Sem café" põe o encanamento na vitrine e
+            ainda sugere uma meta de fazer sete vezes.
+          */}
           <div className="flex items-center gap-3 mt-2 flex-wrap">
-            <span className="text-xs text-text-muted">{habit.frequency}x por semana</span>
-            {habit.preferredDays.length > 0 && (
+            <span className="text-xs text-text-muted">
+              {evitar ? 'todo dia' : `${habit.frequency}x por semana`}
+            </span>
+            {!evitar && habit.preferredDays.length > 0 && (
               <div className="flex gap-1">
                 {DAY_NAMES.map((name, dow) => (
                   <span
@@ -587,7 +683,9 @@ function HabitManageCard({
               className="text-xs font-semibold"
               style={{ color: weekCount >= habit.frequency ? 'var(--color-success)' : accentColor }}
             >
-              {weekCount}/{habit.frequency} em 7 dias
+              {evitar
+                ? `${limpos} ${limpos === 1 ? 'dia limpo' : 'dias limpos'}`
+                : `${weekCount}/${habit.frequency} em 7 dias`}
             </span>
 
             {/* Mini progress bar */}

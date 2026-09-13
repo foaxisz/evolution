@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { dataISO, hojeISO, somarDias } from '../lib/data';
+import { diasLimpos } from '../lib/antiHabitos';
 import type {
   Historia, Quadro, NoDeQuadro, CenaDeQuadro,
   Habit, HabitLog, Challenge, ChallengeLog,
@@ -217,12 +218,40 @@ export function semanasSeguidas(habitId: string, frequency: number): number {
   return sequencia;
 }
 
+/**
+ * Dias limpos seguidos de um anti-hábito.
+ *
+ * Par do `semanasSeguidas`, e com outra unidade de propósito: hábito
+ * normal tolera perder uma terça se a semana fecha, largar alguma coisa
+ * não tolera. A regra está em `lib/antiHabitos` para poder ser testada
+ * sem navegador — aqui só entra o que vem do disco.
+ */
+export function diasLimposSeguidos(habit: Habit): number {
+  return diasLimpos(getHabitLogs(), habit.id, habit.createdAt, hojeISO());
+}
+
 /** Move um hábito uma posição para cima ou para baixo na lista. */
 export function moverHabito(id: string, direcao: -1 | 1): void {
   const lista = getHabits();
   const i = lista.findIndex(h => h.id === id);
-  const j = i + direcao;
-  if (i < 0 || j < 0 || j >= lista.length) return;
+  if (i < 0) return;
+
+  /*
+   * Troca com o vizinho DO MESMO TIPO, e não com o vizinho de índice.
+   *
+   * As duas listas aparecem em seções separadas na tela — "Hábitos" e
+   * "Evitar". Trocar por índice fazia a seta subir um anti-hábito para
+   * dentro da seção dos hábitos: na tela ele não se movia (continua o
+   * primeiro da sua seção) e o hábito de cima descia do nada. A seta
+   * mexe no que a pessoa vê.
+   */
+  const tipo = lista[i].tipo ?? 'fazer';
+  let j = i + direcao;
+  while (j >= 0 && j < lista.length && (lista[j].tipo ?? 'fazer') !== tipo) {
+    j += direcao;
+  }
+  if (j < 0 || j >= lista.length) return;
+
   [lista[i], lista[j]] = [lista[j], lista[i]];
   save('evo_habits', lista.map((h, idx) => ({ ...h, order: idx })));
 }
