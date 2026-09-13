@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Play, Settings, ChartNoAxesCombined,
   ArrowLeft, Pencil, Plus, Flag, History, X, Network,
+  ChevronLeft, ChevronRight, Trash2, Check,
 } from 'lucide-react';
 import {
   getActions, saveAction, updateAction, toggleAction, deleteAction,
-  getSessoesDeFoco, addSessaoDeFoco,
+  getSessoesDeFoco, addSessaoDeFoco, deleteSessaoDeFoco,
   getFocoEmAndamento, setFocoEmAndamento,
   getAjustesDeFoco, setAjustesDeFoco, type AjustesDeFoco,
   getCategoriasDeFoco, saveCategoriaDeFoco, deleteCategoriaDeFoco,
@@ -13,7 +14,7 @@ import {
 } from '../store';
 import type { FocoEmAndamento, SessaoDeFoco, Action, CategoriaDeFoco } from '../types';
 import { terminou, msDecorridos, formatarDuracao, formatarDuracaoCurta, tocarAviso, tocarConclusao, tocarInicio } from '../lib/pomodoro';
-import { hojeISO, somarDias, segundaDaSemana, diaLocal, horaLocal } from '../lib/data';
+import { hojeISO, somarDias, segundaDaSemana, diaLocal, horaLocal, formatarData } from '../lib/data';
 import { ordenarTarefas, reordenar, mudaramDeOrdem } from '../lib/tarefas';
 import HabitIcon from '../components/ui/HabitIcon';
 import Modal from '../components/ui/Modal';
@@ -365,6 +366,10 @@ function EspacoDaFrente({
   const [ajustesAbertos, setAjustesAbertos] = useState(false);
   const [painelAberto, setPainelAberto] = useState(false);
   const [novaTarefa, setNovaTarefa] = useState('');
+  /** Qual dia a lista de blocos mostra. Começa em hoje, anda para trás. */
+  const [diaVisto, setDiaVisto] = useState(hojeISO());
+  /** Bloco com a remoção pendente de confirmação. */
+  const [excluindo, setExcluindo] = useState<string | null>(null);
   const [historicoAberto, setHistoricoAberto] = useState(false);
   /*
    * Uma página por vez. Com um booleano por página, abrir duas ao mesmo
@@ -657,6 +662,23 @@ function EspacoDaFrente({
       doDia: [...doDia].sort((a, b) => b.inicio.localeCompare(a.inicio)),
     };
   }, [sessoes, categoria.id]);
+
+  /*
+   * Os blocos do dia que a lista está mostrando.
+   *
+   * Separado do `m.doDia`, que é sempre HOJE e alimenta os placares: a
+   * lista anda no tempo, os números do topo não. Misturar os dois faria
+   * olhar ontem mudar o "Hoje" do painel.
+   *
+   * Mesma ordem do que havia antes — do mais recente para o mais antigo.
+   */
+  const blocosVistos = useMemo(
+    () => m.minhas
+      .filter(s => diaLocal(s.inicio) === diaVisto)
+      .sort((a, b) => b.inicio.localeCompare(a.inicio)),
+    [m.minhas, diaVisto],
+  );
+  const segundosVistos = blocosVistos.reduce((soma, s) => soma + s.segundosFocados, 0);
 
   const rodando = !!foco && foco.pausadaEm === null;
 
@@ -983,21 +1005,65 @@ function EspacoDaFrente({
         )}
       </section>
 
-      {/* ── Blocos de hoje ── */}
-      {m.doDia.length > 0 && (
+      {/*
+        ── Blocos do dia ──
+
+        Anda para trás no tempo, e deixa apagar um bloco.
+
+        Era só "hoje", e sem botão nenhum: o que o cronômetro gravasse
+        ficava gravado para sempre. Só que o app grava tempo sozinho em
+        dois casos — bloco que vence com o app fechado conta o planejado
+        inteiro — e um número que a pessoa sabe que está errado e não pode
+        corrigir contamina tudo o que se lê depois. Num app cujo ponto é
+        perceber evolução, isso é pior do que não ter o número.
+
+        A exclusão vai pelo `delete*` do store de propósito, e não mexendo
+        no `localStorage`: a sincronização descobre o que sumiu comparando
+        o documento antes e depois da gravação, então só o caminho de
+        dentro apaga também no servidor. Tirar na mão some aqui e volta no
+        próximo aparelho.
+      */}
+      {m.minhas.length > 0 && (
         <section>
           <div className="mb-3 flex items-center gap-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.3em]" style={{ color: cor }}>
-              Blocos de hoje
+              {diaVisto === hojeISO() ? 'Blocos de hoje' : `Blocos · ${formatarData(diaVisto, "d 'de' MMM")}`}
             </h2>
+
+            <div className="flex flex-shrink-0 items-center gap-1">
+              <button
+                onClick={() => { setDiaVisto(d => somarDias(d, -1)); setExcluindo(null); }}
+                aria-label="Dia anterior"
+                className="botao-icone rounded text-text-muted transition-colors hover:text-text-primary"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              {/* Não anda para o futuro: não há bloco lá, e a seta morta
+                  diz isso melhor do que uma tela vazia. */}
+              <button
+                onClick={() => { setDiaVisto(d => somarDias(d, 1)); setExcluindo(null); }}
+                disabled={diaVisto >= hojeISO()}
+                aria-label="Próximo dia"
+                className="botao-icone rounded text-text-muted transition-colors hover:text-text-primary disabled:opacity-30 disabled:hover:text-text-muted"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
             <div className="h-px flex-1 bg-border" />
             <span className="font-arcade text-[0.55rem] text-text-muted">
-              {formatarDuracao(m.hojeSegundos)}
+              {formatarDuracao(segundosVistos)}
             </span>
           </div>
 
+          {blocosVistos.length === 0 && (
+            <p className="font-terminal text-[17px] leading-[1.35] text-text-muted">
+              Nenhum bloco neste dia.
+            </p>
+          )}
+
           <div>
-            {m.doDia.map(s => (
+            {blocosVistos.map(s => (
               // `items-baseline`, não `items-start` com um `mt-0.5` de
               // chute: são três fontes diferentes na mesma linha (bitmap na
               // hora, terminal no nome, mono na duração) e alinhá-las pelo
@@ -1020,6 +1086,46 @@ function EspacoDaFrente({
                 >
                   {formatarDuracao(s.segundosFocados)}
                 </span>
+
+                {/* Confirma na própria linha, como nos quadros: apagar
+                    tempo não tem desfazer, e o bloco certo é o daquela
+                    linha — um modal tiraria a linha de vista justo na hora
+                    de conferir se é ela mesma. */}
+                {excluindo === s.id ? (
+                  <span className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => setExcluindo(null)}
+                      className="botao-icone rounded text-text-muted hover:text-text-primary"
+                      title="Cancelar"
+                    >
+                      <X size={13} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        deleteSessaoDeFoco(s.id);
+                        setSessoes(getSessoesDeFoco());
+                        setExcluindo(null);
+                      }}
+                      className="botao-icone rounded text-danger hover:brightness-125"
+                      title="Confirmar remoção"
+                    >
+                      <Check size={13} />
+                    </button>
+                  </span>
+                ) : (
+                  /* Sempre visível, como os ícones da lista de quadros, e
+                     NÃO aparecendo só no hover: no celular não existe
+                     hover, e um botão que só o mouse alcança é um botão
+                     que metade dos aparelhos não tem. A cor apagada já
+                     basta para ele não competir com o número. */
+                  <button
+                    onClick={() => setExcluindo(s.id)}
+                    aria-label={`Apagar o bloco de ${formatarDuracao(s.segundosFocados)}`}
+                    className="botao-icone flex-shrink-0 rounded text-text-muted transition-colors hover:text-danger"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
