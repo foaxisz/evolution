@@ -62,12 +62,24 @@ export default function BotaoInstalarPWA() {
 
   return (
     <>
+      {/* Cortado, nunca quebrado.
+
+          Este botão mora no rodapé da barra lateral, que encolhe de 240px
+          para 56px numa transição de 200ms. Sem o `nowrap` o rótulo quebrava
+          letra por letra enquanto a barra estreitava: o botão saltava de
+          34px para 194px de altura, inchava o rodapé em 160px e espremia a
+          lista de navegação inteira — e só ao fim da animação tudo voltava
+          ao lugar. Aparecia ao ABRIR a barra, porque é aí que este markup
+          monta de uma vez com a barra ainda estreita.
+
+          O ícone também não encolhe: espremido ele deformava em vez de sair
+          de cena, e quem sai de cena aqui é o `overflow-hidden`. */}
       <button
         onClick={handleClick}
-        className="flex w-full items-center gap-2.5 rounded-xl border border-accent/40 bg-accent/15 px-3 py-2 text-xs font-semibold text-accent-light transition-all hover:bg-accent/25 hover:border-accent"
+        className="flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-accent/40 bg-accent/15 px-3 py-2 text-xs font-semibold text-accent-light transition-all hover:bg-accent/25 hover:border-accent"
       >
-        <Download size={15} className="animate-bounce text-accent-light" />
-        <span>Instalar App</span>
+        <Download size={15} className="flex-shrink-0 animate-bounce text-accent-light" />
+        <span className="whitespace-nowrap">Instalar App</span>
       </button>
 
       {/* Modal com instruções detalhadas se o prompt nativo não disparar automaticamente */}
