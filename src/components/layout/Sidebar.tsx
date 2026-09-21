@@ -59,6 +59,28 @@ export default function Sidebar({
 }: SidebarProps) {
   const { email, sair } = useAutenticacao();
 
+  /* Recolher: sem moldura, sem rótulo, sem cor — é ajuste de mobília, não
+     navegação, e no topo competia com o logo por atenção.
+
+     O mesmo botão serve aos dois tamanhos, em posições diferentes, então
+     ele nasce aqui em vez de aparecer duas vezes lá embaixo. Aberta, a
+     seta entra na linha do e-mail; na régua, onde a largura toda é 56px —
+     já o tamanho da seta — ela fica sozinha e pode ocupar tudo. */
+  const botaoRecolher = (
+    <button
+      onClick={onAlternarRecolhida}
+      aria-label={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
+      title={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
+      className={[
+        'flex flex-shrink-0 items-center justify-center rounded-md text-text-muted/60',
+        'transition-colors hover:bg-bg-card-hover hover:text-text-primary',
+        recolhida ? 'mt-1 h-7 w-full' : 'ml-auto h-6 w-6',
+      ].join(' ')}
+    >
+      {recolhida ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
+    </button>
+  );
+
   return (
     <aside
       className={[
@@ -133,68 +155,55 @@ export default function Sidebar({
         ].join(' ')}
       >
         {recolhida ? (
-          // Régua: sobra o "Sair", que é o único aqui sem substituto em
-          // outro lugar. Instalar o app e ver o e-mail esperam a barra
-          // aberta — nenhum dos dois é gesto de pressa.
-          email && (
-            <button
-              onClick={sair}
-              aria-label="Sair"
-              title={`Sair (${email})`}
-              className="flex w-full items-center justify-center rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-card-hover hover:text-danger"
-            >
-              <LogOut size={16} />
-            </button>
-          )
+          <>
+            {/* Régua: sobra o "Sair", que é o único aqui sem substituto em
+                outro lugar. Instalar o app e ver o e-mail esperam a barra
+                aberta — nenhum dos dois é gesto de pressa. */}
+            {email && (
+              <button
+                onClick={sair}
+                aria-label="Sair"
+                title={`Sair (${email})`}
+                className="flex w-full items-center justify-center rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-card-hover hover:text-danger"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+            {botaoRecolher}
+          </>
         ) : (
           <>
             <BotaoInstalarPWA />
-            {/* E-mail e "Sair" na MESMA linha, o e-mail truncando e o botão sem
-                encolher.
+            {/* E-mail, "Sair" e a seta de recolher na MESMA linha: o e-mail
+                trunca e os dois botões não encolhem.
 
-                Eram duas linhas, e o botão carregava um `ml-auto` que o jogava
-                para a direita — ele existia para separá-lo do "Resincronizar" que
-                ficava à esquerda. Com aquele removido, sobrou um botão solto no
-                canto direito debaixo de um e-mail alinhado à esquerda, sem nada
-                explicando o vão entre os dois. */}
-            {email && (
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <p className="min-w-0 flex-1 truncate text-[11px] text-text-muted" title={email}>{email}</p>
-                <button
-                  onClick={sair}
-                  className="flex flex-shrink-0 items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger"
-                >
-                  <LogOut size={12} />
-                  Sair
-                </button>
-              </div>
-            )}
+                A seta tinha uma linha inteira só para ela debaixo do e-mail —
+                24px de altura e um vão em volta para desenhar um tico de
+                dez pixels, encostado num canto sem nada explicando o
+                espaço vazio ao lado. Ela cabe folgada na sobra desta linha,
+                que o e-mail truncado já deixa livre à direita.
+
+                Sem `justify-between`: quem empurra os botões para a direita
+                é o `flex-1` do e-mail, e o `ml-auto` da seta cobre o caso de
+                não haver e-mail nenhum — no modo local a linha existe só
+                para ela. */}
+            <div className="flex items-center gap-2 pt-1">
+              {email && (
+                <>
+                  <p className="min-w-0 flex-1 truncate text-[11px] text-text-muted" title={email}>{email}</p>
+                  <button
+                    onClick={sair}
+                    className="flex flex-shrink-0 items-center gap-1.5 text-xs text-text-muted transition-colors hover:text-danger"
+                  >
+                    <LogOut size={12} />
+                    Sair
+                  </button>
+                </>
+              )}
+              {botaoRecolher}
+            </div>
           </>
         )}
-
-        {/* Recolher, na última linha de tudo.
-            Sem moldura, sem rótulo, sem cor: é ajuste de mobília, não
-            navegação, e no topo competia com o logo por atenção. A seta
-            acompanha a borda que ela empurra — encostada à direita quando
-            aberta, no meio quando é só a régua.
-
-            Aberta, o botão tem o tamanho da seta e nada mais. Ocupando a
-            largura toda ele virava uma faixa vazia atravessando o rodapé,
-            com um tico de desenho na ponta — e o realce do hover
-            acendia essa faixa inteira. Na régua a largura toda é 56px, que
-            já é o tamanho da seta: lá ela pode ficar. */}
-        <button
-          onClick={onAlternarRecolhida}
-          aria-label={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
-          title={recolhida ? 'Expandir a barra' : 'Recolher a barra'}
-          className={[
-            'mt-1 flex items-center justify-center rounded-md text-text-muted/60',
-            'transition-colors hover:bg-bg-card-hover hover:text-text-primary',
-            recolhida ? 'h-7 w-full' : 'ml-auto h-6 w-6',
-          ].join(' ')}
-        >
-          {recolhida ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
-        </button>
       </div>
     </aside>
   );
